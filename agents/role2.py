@@ -6,12 +6,13 @@ agents.role2 的 Docstring
 from langchain.agents import create_agent
 from agents.llm import llm
 from langgraph.checkpoint.memory import InMemorySaver
+from agents.role_prompts import role2_prompts
 
 checkpointer = InMemorySaver()
 
 role_2 = create_agent(
     model=llm,
-    system_prompt="你是一个代码助手，负责接收角色一的处理结果并生成相对应的可执行的python代码，以纯字符串的形式只输出代码内容。",
+    system_prompt=role2_prompts,
     checkpointer=checkpointer,
 )
 

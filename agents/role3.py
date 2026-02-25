@@ -6,6 +6,7 @@ agents.role3 的 Docstring
 from langchain.agents import create_agent
 from agents.llm import llm
 from langgraph.checkpoint.memory import InMemorySaver
+from agents.role_prompts import role3_prompts
 
 checkpointer = InMemorySaver()
 
@@ -15,7 +16,7 @@ tools = [code_box]
 
 role_3 = create_agent(
     model=llm,
-    system_prompt="你是一个代码助手，负责接收用户问题和角色二生成的代码，运行代码并结合结果优化回答用户问题。",
+    system_prompt=role3_prompts,
     checkpointer=checkpointer,
     tools=tools
 )
