@@ -26,4 +26,4 @@ from agents.state_messages import StateMessages
 def role_3_node(state: StateMessages):
     messages = state.messages
     response = role_3.invoke({"messages": messages})
-    return {"answer": response['messages'][-1].content}
+    return {"messages": messages + [response['messages'][-1]], "answer": response['messages'][-1].content}
