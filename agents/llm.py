@@ -1,12 +1,19 @@
-from langchain_openai import ChatOpenAI
+from langchain_deepseek import ChatDeepSeek
 from dotenv import load_dotenv
 import os
 
 load_dotenv()
 
-llm = ChatOpenAI(
-    model=os.environ.get("MODEL_NAME"),
-    api_key=os.environ.get("MODEL_API_KEY"),
-    base_url=os.environ.get("MODEL_URL"),
+chat_model = ChatDeepSeek(
+    model_name=os.environ.get("CHAT_MODEL"),
+    api_key=os.environ.get("DEEPSEEK_API_KEY"),
+    api_base=os.environ.get("DEEPSEEK_API_URL"),
+    temperature=0,
+)
+
+reasoner_model = ChatDeepSeek(
+    model_name=os.environ.get("REASONER_MODEL"),
+    api_key=os.environ.get("DEEPSEEK_API_KEY"),
+    api_base=os.environ.get("DEEPSEEK_API_URL"),
     temperature=0,
 )

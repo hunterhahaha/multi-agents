@@ -4,7 +4,7 @@ agents.role3 的 Docstring
 """
 
 from langchain.agents import create_agent
-from agents.llm import llm
+from agents.llm import chat_model
 from langgraph.checkpoint.memory import InMemorySaver
 from agents.role_prompts import role3_prompts
 
@@ -15,7 +15,7 @@ from sandbox.box_langchain import code_box
 tools = [code_box]
 
 role_3 = create_agent(
-    model=llm,
+    model=chat_model,
     system_prompt=role3_prompts,
     checkpointer=checkpointer,
     tools=tools

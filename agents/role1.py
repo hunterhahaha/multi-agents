@@ -4,37 +4,52 @@ agents.role1 的 Docstring
 """
 
 from langchain.agents import create_agent
-from agents.llm import llm
+from agents.llm import reasoner_model
 from langgraph.checkpoint.memory import InMemorySaver
 from agents.role_prompts import role1_prompts
 
 checkpointer = InMemorySaver()
 
-from pydantic import BaseModel, Field
-from typing import TypedDict, Annotated
-
-class agent_output(BaseModel):
-    answer: Annotated[str, Field(description="用户问题的清晰化和流程化后的结果。")]
-    next_node: Annotated[str, Field(
-        description="下一个要执行的节点，根据用户意图在role_2（代码生成角色）和END（结束）之间做选择。",
-        enum=["role_2", "END"],
-        )
-    ]
-
 role_1 = create_agent(
-    model=llm,
+    model=reasoner_model,
     system_prompt=role1_prompts,
     checkpointer=checkpointer,
-    response_format=agent_output,
 )
+
+# 正则化提取模型决策
+import re
+
+def parse_next_node(content: str) -> tuple:
+    match = re.search(r'<next_node>\s*(role_2|END)\s*</next_node>', content, re.IGNORECASE)
+    clean_content = re.sub(r'<next_node>.*?</next_node>', '', content, flags=re.IGNORECASE | re.DOTALL).strip()
+    if match:
+        next_node = match.group(1).strip()
+        return next_node, clean_content
+    
+    return "END", clean_content
 
 from agents.state_messages import StateMessages
 
 def role_1_node(state: StateMessages):
     messages = state.messages
-    response = role_1.invoke({"messages": messages})
-    return {
-        "messages": messages + [("assistant", response['structured_response'].answer)], 
-        "next_node": response['structured_response'].next_node, 
-        "answer": response['structured_response'].answer if response['structured_response'].next_node == "END" else "",
-    }
+
+    thinking = False
+
+    for mode, chunk in role_1.stream(
+        {"messages": messages},
+        stream_mode=["messages", "updates"],
+    ):
+        if mode == "messages":
+            message, metadata = chunk
+            if message.additional_kwargs:
+                if not thinking:
+                    thinking = True
+                    print("思考中...")
+                print(message.additional_kwargs.get("reasoning_content"), end="", flush=True)
+        if mode == "updates":
+            next_node, clean_content = parse_next_node(chunk['model']['messages'][-1].content)
+            return {
+                "messages": messages + [("assistant", clean_content)], 
+                "next_node": next_node, 
+                "answer": clean_content if next_node == "END" else "",
+            }

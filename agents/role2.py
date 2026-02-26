@@ -4,14 +4,14 @@ agents.role2 的 Docstring
 """
 
 from langchain.agents import create_agent
-from agents.llm import llm
+from agents.llm import chat_model
 from langgraph.checkpoint.memory import InMemorySaver
 from agents.role_prompts import role2_prompts
 
 checkpointer = InMemorySaver()
 
 role_2 = create_agent(
-    model=llm,
+    model=chat_model,
     system_prompt=role2_prompts,
     checkpointer=checkpointer,
 )
