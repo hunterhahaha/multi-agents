@@ -5,7 +5,7 @@
 from langchain.agents import create_agent
 from agents.llm import chat_model
 from agents.role_prompts import role_3_prompts
-
+from langchain.messages import SystemMessage, AIMessage
 from sandbox.box_langchain import code_box
 
 tools = [code_box]
@@ -21,4 +21,7 @@ from agents.state_messages import StateMessages
 def role_3_node(state: StateMessages):
     messages = state.messages
     response = role_3.invoke({"messages": messages})
+    print('*' * 50)
+    print(response)
+    print('*' * 50)
     return {"messages": [response['messages'][-1]], "answer": response['messages'][-1].content}

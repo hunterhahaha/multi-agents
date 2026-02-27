@@ -11,33 +11,28 @@ def chat_node(state: StateMessages):
     response = ""
     if state.use_reasoner:
         thinking = False
-        chat = False
         for chunk in reasoner_model.stream(
             input=[("system", prompt), ('user', state.question)]
         ):
-            if chunk.additional_kwargs:
+            msg = chunk.additional_kwargs.get('reasoning_content')
+            if msg:
                 if not thinking:
                     thinking = True
                     print("思考中...")
-                print(chunk.additional_kwargs['reasoning_content'], end="", flush=True)
+                print(msg, end="", flush=True)
             else:
                 if thinking:
                     thinking = False
                     print("\n思考完成，开始对话...")
                 response += chunk.content
                 print(chunk.content, end="", flush=True)
-        if not chat:
-            chat = True
-            print("\n对话完成...")
+        print("\n对话完成...")
     else:
-        chat = False
         print("开始对话...")
         for chunk in chat_model.stream(
             input=[("system", prompt), ('user', state.question)]
         ):
             response += chunk.content
             print(chunk.content, end="", flush=True)
-        if not chat:
-            chat = True
-            print("\n对话完成...")
+        print("\n对话完成...")
     return {"messages": [("assistant", response)], "answer": response}

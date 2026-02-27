@@ -17,7 +17,7 @@ class Intent(BaseModel):
         )
     ]
     use_reasoner: Annotated[bool, Field(
-        description="是否需要使用推理模型来判断意图",
+        description="回答该问题是否需要推理模型：复杂逻辑分析、算法设计、深度推理为True；简单问答、闲聊为False",
         enum=[True, False],
         )
     ]
@@ -34,6 +34,6 @@ def intent_node(state_messages: StateMessages):
     from time import time
     start_time = time()
     llm = chat_model.with_structured_output(Intent)
-    response = llm.invoke(state_messages.messages[-1].content)
+    response = llm.invoke(state_messages.messages)
     print(f"意图判断耗时：{time() - start_time}秒")
     return {"next_node": response.intent, "use_reasoner": response.use_reasoner}
