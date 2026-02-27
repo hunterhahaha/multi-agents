@@ -5,7 +5,6 @@ from langgraph.graph.message import add_messages
 
 class StateMessages(BaseModel):
     """
-    StateMessages 的 Docstring
     参数：
         question: 问题，用于存储用户的原始问题。
         messages: 消息列表，用于存储对话历史记录。
