@@ -6,4 +6,3 @@ if __name__ == "__main__":
         if user_input == "exit":
             break
         state = graph.invoke({"question": user_input, "messages": [("user", user_input)]})
-        print("\nAI: " + state["answer"])

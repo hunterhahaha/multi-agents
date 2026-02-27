@@ -4,10 +4,7 @@
 
 from langchain.agents import create_agent
 from agents.llm import chat_model
-from langgraph.checkpoint.memory import InMemorySaver
 from agents.role_prompts import role_3_prompts
-
-checkpointer = InMemorySaver()
 
 from sandbox.box_langchain import code_box
 
@@ -16,7 +13,6 @@ tools = [code_box]
 role_3 = create_agent(
     model=chat_model,
     system_prompt=role_3_prompts,
-    checkpointer=checkpointer,
     tools=tools
 )
 
