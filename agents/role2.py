@@ -5,7 +5,7 @@
 from agents.llm import reasoner_model
 from agents.role_prompts import role_2_prompts
 from agents.state_messages import StateMessages
-from langchain.messages import SystemMessage, AIMessage
+from langchain.messages import SystemMessage, HumanMessage
 
 def role_2_node(state: StateMessages):
     response = ""
@@ -23,8 +23,8 @@ def role_2_node(state: StateMessages):
         else:
             if thinking:
                 thinking = False
-                print("思考完毕，编码中...")
+                print("\n思考完毕，编码中...")
             response += chunk.content
             print(chunk.content, end="", flush=True)
-    print("编码完毕...")
-    return {"messages": [AIMessage(content=response)], "code": response}    
+    print("\n编码完毕...")
+    return {"messages": [HumanMessage(content=response)], "code": response}    

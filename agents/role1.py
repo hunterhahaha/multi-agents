@@ -4,7 +4,7 @@
 
 from agents.llm import reasoner_model, chat_model
 from agents.role_prompts import role_1_prompts
-from langchain.messages import SystemMessage, AIMessage
+from langchain.messages import SystemMessage, HumanMessage
 from agents.state_messages import StateMessages
 
 def role_1_node(state: StateMessages):
@@ -27,7 +27,7 @@ def role_1_node(state: StateMessages):
                     print("\n思考完成，分析问题...")
                 response += chunk.content
                 print(chunk.content, end="", flush=True)
-        print("分析完成...")
+        print("\n分析完成...")
     else:
         print("问题分析...")
         for chunk in chat_model.stream(
@@ -35,6 +35,6 @@ def role_1_node(state: StateMessages):
         ):
             response += chunk.content
             print(chunk.content, end="", flush=True)
-        print("分析完成...")
+        print("\n分析完成...")
     
-    return {"messages": [AIMessage(content=response)]}
+    return {"messages": [HumanMessage(content=response)]}

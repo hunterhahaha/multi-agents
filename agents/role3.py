@@ -19,9 +19,15 @@ role_3 = create_agent(
 from agents.state_messages import StateMessages
 
 def role_3_node(state: StateMessages):
-    messages = state.messages
-    response = role_3.invoke({"messages": messages})
-    print('*' * 50)
-    print(response)
-    print('*' * 50)
-    return {"messages": [response['messages'][-1]], "answer": response['messages'][-1].content}
+    response = ""
+    
+    print("最终回答...")
+    for mode, chunk in role_3.stream(
+        input={"messages": state.messages},
+        stream_mode=["messages"]
+    ):
+        message, metadata = chunk
+        response += message.content
+        print(message.content, end="", flush=True)
+    print("\n回答完成...")
+    return {"messages": [AIMessage(content=response)], "answer": response}
