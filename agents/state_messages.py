@@ -12,7 +12,7 @@ class StateMessages(BaseModel):
         code_result: 代码运行结果，用于存储运行生成的代码后的结果。
         answer: 回答，用于存储生成的回答。
         next_node: 下一个节点，用于存储下一个要执行的节点。
-        is_reasoner: 是否需要使用推理模型。
+        use_reasoner: 是否需要使用推理模型。
     """
     question: Annotated[str, Field(default="")]
     messages: Annotated[List[BaseMessage], add_messages]

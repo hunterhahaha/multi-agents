@@ -5,4 +5,9 @@ if __name__ == "__main__":
         user_input = input("我:")
         if user_input == "exit":
             break
-        state = graph.invoke({"question": user_input, "messages": [("user", user_input)]})
+        for stream_mode, chunk in graph.stream(
+            input={"question": user_input, "messages": [("user", user_input)]},
+            stream_mode=["custom", "updates"]
+        ):
+            if stream_mode == "custom":
+                print(chunk, end="", flush=True)

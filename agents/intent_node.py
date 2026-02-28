@@ -6,6 +6,7 @@ from agents.llm import chat_model
 from pydantic import BaseModel, Field
 from typing import Annotated
 from agents.state_messages import StateMessages
+from langgraph.config import get_stream_writer  
 
 class Intent(BaseModel):
     """
@@ -22,18 +23,15 @@ class Intent(BaseModel):
         )
     ]
 
-def intent_node(state_messages: StateMessages):
-    """
+def intent_node(state: StateMessages):
+    """                                                                                                                                                                                                                                                                                                                                          
     判断用户问题的意图，和是否需要使用推理模型。
     """
-    prompt = """
-    请判断用户问题的意图，将其分类为role_1（问题处理角色）或chat（聊天角色）。
-    同时判断回答该问题是否需要使用推理模型，将其分类为True（需要）或False（不需要）。
-    """
-    print("意图判断中...")
+    writer = get_stream_writer()
+    writer("意图判断中...\n")
     from time import time
     start_time = time()
     llm = chat_model.with_structured_output(Intent)
-    response = llm.invoke(state_messages.messages)
-    print(f"意图判断耗时：{time() - start_time}秒")
+    response = llm.invoke(state.messages)
+    writer(f"耗时：{time() - start_time:.2f}秒")
     return {"next_node": response.intent, "use_reasoner": response.use_reasoner}
