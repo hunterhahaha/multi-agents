@@ -7,6 +7,9 @@ from agents.llm import chat_model
 from agents.role_prompts import role_3_prompts
 from langchain.messages import SystemMessage, AIMessage
 from sandbox.box_langchain import code_box
+from langgraph.config import get_stream_writer  
+from agents.writer_messages import Message
+from time import time
 
 tools = [code_box]
 
@@ -20,14 +23,15 @@ from agents.state_messages import StateMessages
 
 def role_3_node(state: StateMessages):
     response = ""
-    
-    print("最终回答...")
+    writer = get_stream_writer()  
+    start_time = time()
+    writer(Message(type="assistant", content="最终回答...\n"))
     for mode, chunk in role_3.stream(
         input={"messages": state.messages},
         stream_mode=["messages"]
     ):
         message, metadata = chunk
         response += message.content
-        print(message.content, end="", flush=True)
-    print("\n回答完成...")
+        writer(Message(type="assistant", content=message.content))
+    writer(Message(type="assistant", content=f"\n回答完成，耗时{time() - start_time:.2f}秒\n"))
     return {"messages": [AIMessage(content=response)], "answer": response}

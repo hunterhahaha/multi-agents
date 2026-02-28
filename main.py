@@ -10,4 +10,4 @@ if __name__ == "__main__":
             stream_mode=["custom", "updates"]
         ):
             if stream_mode == "custom":
-                print(chunk, end="", flush=True)
+                print(chunk["content"], end="", flush=True)
