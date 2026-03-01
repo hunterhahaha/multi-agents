@@ -31,15 +31,14 @@ async def chat(body: dict):
                 yield chunk["content"]
 
     async def async_generator():
-        """把同步生成器包装成异步事件"""
+        """把同步生成器包装成异步生成器"""
         loop = asyncio.get_event_loop()
-        value = sync_generator() # 生成器
+        gen = sync_generator()
         while True:
-            try:
-                chunk = await loop.run_in_executor(executor, next, value)
-                yield chunk
-            except StopIteration:
+            chunk = await loop.run_in_executor(executor, lambda: next(gen, None))
+            if chunk is None:
                 break
+            yield chunk
 
     return StreamingResponse(
         async_generator(),

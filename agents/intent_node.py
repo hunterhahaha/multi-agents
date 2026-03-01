@@ -29,10 +29,25 @@ def intent_node(state: StateMessages):
     判断用户问题的意图，和是否需要使用推理模型。
     """
     writer = get_stream_writer()
+    system_prompt = """
+    判断用户意图，只输出一行，格式必须为：<intent>,<reasoner>；
+    intent只能是role_1（代码处理角色）或chat（聊天角色）；
+    reasoner只能是True或False；
+    例如：role_1,True或chat,False
+    注意：只能输出一行，不能有任何解释。
+    """
+
     writer(Message(type="intent_judge", content="意图判断中...\n"))
+
     from time import time
     start_time = time()
-    llm = chat_model.with_structured_output(Intent)
-    response = llm.invoke(state.messages)
+    response = ""
+    for chunk in chat_model.stream(
+        [system_prompt, state.question]
+    ):
+        response += chunk.content
+        if ("\n" in response) or (len(response) > 8):
+            break
     writer(Message(type="intent_judge", content=f"耗时：{time() - start_time:.2f}秒\n"))
-    return {"next_node": response.intent, "use_reasoner": response.use_reasoner}
+    result = response.split(",")
+    return {"next_node": result[0], "use_reasoner": result[1]}
