@@ -5,6 +5,9 @@ from agents.role2 import role_2_node
 from agents.role3 import role_3_node
 from agents.chat_node import chat_node
 from agents.intent_node import intent_node
+from langgraph.checkpoint.memory import InMemorySaver
+
+checkpoint = InMemorySaver()
 
 graph = StateGraph(StateMessages)
 graph.add_node("role_1", role_1_node)
@@ -17,7 +20,7 @@ graph.add_edge(START, "intent_judge")
 # 决策路径
 graph.add_conditional_edges(
     "intent_judge",
-    lambda state: state.next_node,
+    lambda state: state["next_node"],
     {
         "role_1": "role_1",
         "chat": "chat",
@@ -30,4 +33,4 @@ graph.add_edge("role_3", END)
 # 路径二
 graph.add_edge("chat", END)
 
-graph = graph.compile()
+graph = graph.compile(checkpointer=checkpoint)

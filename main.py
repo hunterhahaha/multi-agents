@@ -5,12 +5,15 @@ import uvicorn
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from langchain_core.runnables import RunnableConfig
+from agents.state_messages import StateMessages
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 executor = ThreadPoolExecutor()
+config: RunnableConfig = {"configurable": {"thread_id": "1"}}
 
 @app.get("/debug/ping")
 async def ping():
@@ -20,12 +23,12 @@ async def ping():
 async def chat(body: dict):
     user_input = body["message"]
     logger.info(f"收到请求：{user_input}")
-
     def sync_generator():
         """封装同步生成器，stream会同步阻塞"""
         for stream_mode, chunk in graph.stream(
             input={"question": user_input, "messages": [("user", user_input)]},
-            stream_mode=["custom", "updates"]
+            stream_mode=["custom", "updates"],
+            config=config
         ):
             if stream_mode == "custom":
                 yield chunk["content"]

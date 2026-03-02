@@ -43,7 +43,7 @@ def intent_node(state: StateMessages):
     start_time = time()
     response = ""
     for chunk in chat_model.stream(
-        [system_prompt, state.question]
+        [system_prompt, state["question"]]
     ):
         response += chunk.content
         if ("\n" in response) or (len(response) > 8):

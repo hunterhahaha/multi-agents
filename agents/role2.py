@@ -17,7 +17,7 @@ def role_2_node(state: StateMessages):
     thinking = False
     
     for chunk in reasoner_model.stream(
-        input=[SystemMessage(content=role_2_prompts)] + state.messages
+        input=[SystemMessage(content=role_2_prompts)] + state["messages"]
     ):
         msg = chunk.additional_kwargs.get("reasoning_content")
         if msg:

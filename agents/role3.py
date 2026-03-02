@@ -27,7 +27,7 @@ def role_3_node(state: StateMessages):
     start_time = time()
     writer(Message(type="assistant", content="最终回答...\n"))
     for mode, chunk in role_3.stream(
-        input={"messages": state.messages},
+        input={"messages": state["messages"]},
         stream_mode=["messages"]
     ):
         message, metadata = chunk

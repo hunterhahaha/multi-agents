@@ -14,10 +14,10 @@ def chat_node(state: StateMessages):
     start_time = time()
     writer = get_stream_writer()  
     response = ""
-    if state.use_reasoner:
+    if state["use_reasoner"]:
         thinking = False
         for chunk in reasoner_model.stream(
-            input=[("system", prompt), ('user', state.question)]
+            input=[("system", prompt)] + state["messages"]
         ):
             msg = chunk.additional_kwargs.get('reasoning_content')
             if msg:
@@ -37,7 +37,7 @@ def chat_node(state: StateMessages):
     else:
         writer(Message(type="assistant", content="聊天助手： "))
         for chunk in chat_model.stream(
-            input=[("system", prompt), ('user', state.question)]
+            input=[("system", prompt)] + state["messages"]
         ):
             response += chunk.content
             writer(Message(type="assistant", content=chunk.content))

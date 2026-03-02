@@ -15,10 +15,10 @@ def role_1_node(state: StateMessages):
     start_time = time()
     writer = get_stream_writer()  
 
-    if state.use_reasoner:
+    if state["use_reasoner"]:
         thinking = False
         for chunk in reasoner_model.stream(
-            input=[SystemMessage(content=role_1_prompts)] + state.messages
+            input=[SystemMessage(content=role_1_prompts)] + state["messages"]
         ):
             msg = chunk.additional_kwargs.get('reasoning_content')
             if msg:
@@ -40,7 +40,7 @@ def role_1_node(state: StateMessages):
         start_time = time()
         writer(Message(type="assistant", content="问题分析...\n"))
         for chunk in chat_model.stream(
-            input=[('system', role_1_prompts)] + state.messages 
+            input=[('system', role_1_prompts)] + state["messages"] 
         ):
             response += chunk.content
             writer(Message(type="assistant", content=chunk.content))

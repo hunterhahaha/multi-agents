@@ -1,9 +1,9 @@
-from typing import Annotated, List
+from typing import Annotated, List, TypedDict
 from pydantic import BaseModel, Field
 from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
+from operator import add
 
-class StateMessages(BaseModel):
+class StateMessages(TypedDict):
     """
     参数：
         question: 问题，用于存储用户的原始问题。
@@ -15,7 +15,7 @@ class StateMessages(BaseModel):
         use_reasoner: 是否需要使用推理模型。
     """
     question: Annotated[str, Field(default="")]
-    messages: Annotated[List[BaseMessage], add_messages]
+    messages: Annotated[List[BaseMessage], add]
     code: Annotated[str, Field(default="")]
     answer: Annotated[str, Field(default="")]
     next_node: Annotated[str, Field(default="")]
