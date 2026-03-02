@@ -2,7 +2,7 @@ import subprocess
 from langchain.tools import tool
 
 @tool
-def code_box(code: str) -> str:
+def python_code_box(code: str) -> str:
     """
     功能：
     一个沙盒环境，用来运行ai生成的python代码。
@@ -13,9 +13,18 @@ def code_box(code: str) -> str:
     异常：
     如果代码运行过程中发生异常，会返回异常信息。
     """
-    result = subprocess.run(
-        ["python", "-c", f"{code}"],
-        capture_output=True, 
-        text=True
-    )
-    return result.stdout
+    try:
+        result = subprocess.run(
+            ["python", "-c", f"{code}"],
+            capture_output=True, 
+            text=True,
+            timeout=30,
+        )
+        # 捕获异常
+        if result.returncode != 0:
+            return f"Error: {result.stderr}"
+        
+        return result.stdout
+    # 处理超时报错
+    except subprocess.TimeoutExpired:
+        return "Error: Code execution timed out, limit 30s."
