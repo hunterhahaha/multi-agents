@@ -17,7 +17,8 @@ def role_2_node(state: StateMessages):
     thinking = False
     input = [SystemMessage(content=role_2_prompts)] + state["messages"]
 
-    if state["retry_count"] > 0:
+    # 追加报错信息和错误代码
+    if state.get("retry_count", 0) > 0:
         input.append(
             HumanMessage(
                 content=f"""

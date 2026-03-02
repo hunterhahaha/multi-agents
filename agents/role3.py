@@ -39,22 +39,22 @@ def role_3_node(state: StateMessages):
                 code_result = chunk["tools"]["messages"][0].content
                 # 处理报错，执行反馈环
                 if code_result.startswith("Error:"):
-                    if state["retry_count"] < 2:
+                    if state.get("retry_count", 0) < 3:
                         writer(
                             Message(
                                 type="assistant", 
                                 content=f"""
                                 \n代码执行失败，耗时{time() - start_time:.2f}秒，
-                                即将进行第{state['retry_count'] + 1}次重试
+                                即将进行第{state.get("retry_count", 0) + 1}次重试
                                 \n"""
                             )
                         )
                         return {
                             "next_node": "role_2",
-                            "retry_count": state["retry_count"] + 1,
+                            "retry_count": state.get("retry_count", 0) + 1,
                             "code_error": code_result,
                         }
-                    elif state["retry_count"] >= 3:
+                    elif state.get("retry_count", 0) >= 3:
                         writer(
                             Message(
                                 type="assistant", 
