@@ -29,8 +29,17 @@ graph.add_conditional_edges(
 # 路径一
 graph.add_edge("role_1", "role_2")
 graph.add_edge("role_2", "role_3")
-graph.add_edge("role_3", END)
 # 路径二
 graph.add_edge("chat", END)
+
+# 沙盒代码执行异常反馈环
+graph.add_conditional_edges(
+    "role_3",
+    lambda state: state["next_node"],
+    {
+        "role_2": "role_2",
+        "END": END,
+    },
+)
 
 graph = graph.compile(checkpointer=checkpoint)
