@@ -52,10 +52,10 @@ multi-agents/
 ## 下一阶段规划
 
 ### 阶段一：重命名与代码清理（短期）
-- [ ] role1 → planner，role2 → coder，role3 → executor
-- [ ] 删除已弃用的 `intent_node.py`
-- [ ] 修复 graph.py 中 `END` 对象作为字典 key 的 bug，改为字符串 `"END"`
-- [ ] State 中补充 `code_result` 字段，executor 将执行结果单独存储而不混入 messages
+~~- [ ] role1 → planner，role2 → coder，role3 → executor~~
+~~- [ ] 删除已弃用的 `intent_node.py`~~
+~~- [ ] 修复 graph.py 中 `END` 对象作为字典 key 的 bug，改为字符串 `"END"`~~
+~~- [ ] State 中补充 `code_result` 字段，executor 将执行结果单独存储而不混入 messages~~
 
 ### 阶段二：扩展 Agent 能力（中期）
 目标：让各 Agent 具备真正的工具调用能力，而不仅是 LLM 调用链
