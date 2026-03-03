@@ -44,7 +44,7 @@ graph.add_conditional_edges(
     lambda state: state["next_node"],
     {
         "role_2": "role_2",
-        END: "supervisor",
+        "END": "supervisor",
     },
 )
 
