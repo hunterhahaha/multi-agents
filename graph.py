@@ -11,10 +11,10 @@ from langgraph.checkpoint.memory import InMemorySaver
 checkpoint = InMemorySaver()
 
 graph = StateGraph(StateMessages)
-graph.add_node("role_1", planner_node)
-graph.add_node("role_2", coder_node)
-graph.add_node("role_3", executor_node)
-graph.add_node("chat", chat_node)
+graph.add_node("planner", planner_node)
+graph.add_node("coder", coder_node)
+graph.add_node("executor", executor_node)
+graph.add_node("chatter", chat_node)
 graph.add_node("supervisor", supervisor_node)
 
 graph.add_edge(START, "supervisor")
@@ -24,25 +24,25 @@ graph.add_conditional_edges(
     "supervisor",
     lambda state: state["next_node"],
     {
-        "role_1": "role_1",
-        "chat": "chat",
+        "planner": "planner",
+        "chatter": "chatter",
         "END": END, 
     },
 )
 
 # 路径一
-graph.add_edge("role_1", "role_2")
-graph.add_edge("role_2", "role_3")
+graph.add_edge("planner", "coder")
+graph.add_edge("coder", "executor")
 
 # 路径二
-graph.add_edge("chat", "supervisor")
+graph.add_edge("chatter", "supervisor")
 
 # 沙盒代码执行异常反馈环
 graph.add_conditional_edges(
-    "role_3",
+    "executor",
     lambda state: state["next_node"],
     {
-        "role_2": "role_2",
+        "coder": "coder",
         "END": "supervisor",
     },
 )
