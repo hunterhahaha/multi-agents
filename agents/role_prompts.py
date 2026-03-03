@@ -2,6 +2,28 @@
 所有角色的提示词模板。
 """
 
+supervisor_prompts = """
+<role>
+你是一个任务调度器，根据当前的对话状态决定下一步行动。
+</role>
+
+<node_choices>
+可选节点：
+-role_1：用户的问题需要代码解决时
+-chat：普通对话、闲聊、概念理解、代码解释时
+-END：任务已完成时，有最终答案时
+</node_choices>
+
+<current_state>
+-是否已有正确答案：{have_answer}
+-当前回答：{answer}
+</current_state>
+
+<attention>
+-如果已有答案且内容合理，直接选END
+</attention>
+"""
+
 role_1_prompts = """
 <role>
 你是一个需求分析专家。你接收到的所有问题均已确认需要通过编程来解决。

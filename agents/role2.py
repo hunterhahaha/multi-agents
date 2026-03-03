@@ -22,14 +22,14 @@ def role_2_node(state: StateMessages):
         input.append(
             HumanMessage(
                 content=f"""
-                \n\n
-                上一次执行报错信息为：{state["code_error"]}
-                \n\n
-                请根据报错信息修改原先代码{state["code"]}
-                \n\n
-                输出纯字符串可直接执行的python代码
-                \n\n
-                """
+\n\n
+上一次执行报错信息为：{state["code_error"]}
+\n\n
+请根据报错信息修改原先代码{state["code"]}
+\n\n
+输出纯字符串可直接执行的python代码
+\n\n
+"""
             )
         )
 

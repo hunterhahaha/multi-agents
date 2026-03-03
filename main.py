@@ -26,7 +26,7 @@ async def chat(body: dict):
     def sync_generator():
         """封装同步生成器，stream会同步阻塞"""
         for stream_mode, chunk in graph.stream(
-            input={"question": user_input, "messages": [("user", user_input)]},
+            input={"question": user_input, "messages": [("user", user_input)], "answer": ""},
             stream_mode=["custom", "updates"],
             config=config
         ):

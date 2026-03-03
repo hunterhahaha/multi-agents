@@ -14,6 +14,7 @@ def chat_node(state: StateMessages):
     start_time = time()
     writer = get_stream_writer()  
     response = ""
+    
     if state["use_reasoner"]:
         thinking = False
         for chunk in reasoner_model.stream(
@@ -34,6 +35,7 @@ def chat_node(state: StateMessages):
                     writer(Message(type="assistant", content="聊天助手： "))
                 writer(Message(type="assistant", content=chunk.content))
                 response += chunk.content
+    
     else:
         writer(Message(type="assistant", content="聊天助手： "))
         for chunk in chat_model.stream(
@@ -41,5 +43,7 @@ def chat_node(state: StateMessages):
         ):
             response += chunk.content
             writer(Message(type="assistant", content=chunk.content))
+
     writer(Message(type="assistant", content=f"\n聊天完成...耗时{time() - start_time:.2f}秒\n"))
+    
     return {"messages": [("assistant", response)], "answer": response}

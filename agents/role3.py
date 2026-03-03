@@ -44,9 +44,9 @@ def role_3_node(state: StateMessages):
                             Message(
                                 type="assistant", 
                                 content=f"""
-                                \n代码执行失败，耗时{time() - start_time:.2f}秒，
-                                即将进行第{state.get("retry_count", 0) + 1}次重试
-                                \n"""
+\n代码执行失败，耗时{time() - start_time:.2f}秒，
+即将进行第{state.get("retry_count", 0) + 1}次重试
+\n"""
                             )
                         )
                         return {
@@ -59,10 +59,10 @@ def role_3_node(state: StateMessages):
                             Message(
                                 type="assistant", 
                                 content=f"""
-                                \n代码执行失败，耗时{time() - start_time:.2f}秒，已重试3次，仍未成功
-                                \n报错原因如下：
-                                \n{code_result}
-                                \n""",
+\n代码执行失败，耗时{time() - start_time:.2f}秒，已重试3次，仍未成功
+\n报错原因如下：
+\n{code_result}
+\n""",
                             )
                         )
                         return {
