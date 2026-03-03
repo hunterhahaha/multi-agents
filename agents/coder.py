@@ -3,7 +3,7 @@
 """
 
 from agents.llm import reasoner_model
-from agents.role_prompts import role_2_prompts
+from agents.role_prompts import coder_prompts
 from agents.state_messages import StateMessages
 from langchain.messages import SystemMessage, HumanMessage
 from langgraph.config import get_stream_writer  
@@ -15,7 +15,7 @@ def coder_node(state: StateMessages):
     start_time = time()
     writer = get_stream_writer()  
     thinking = False
-    input = [SystemMessage(content=role_2_prompts)] + state["messages"]
+    input = [SystemMessage(content=coder_prompts)] + state["messages"]
 
     # 追加报错信息和错误代码
     if state.get("retry_count", 0) > 0:

@@ -4,7 +4,7 @@
 
 from langchain.agents import create_agent
 from agents.llm import chat_model
-from agents.role_prompts import role_3_prompts
+from agents.role_prompts import executor_prompts
 from langchain.messages import AIMessage, AIMessageChunk
 from sandbox.box_langchain import python_code_box
 from langgraph.config import get_stream_writer  
@@ -13,9 +13,9 @@ from time import time
 
 tools = [python_code_box]
 
-role_3 = create_agent(
+planner_agent = create_agent(
     model=chat_model,
-    system_prompt=role_3_prompts,
+    system_prompt=executor_prompts,
     tools=tools
 )
 
@@ -29,7 +29,7 @@ def executor_node(state: StateMessages):
 
     writer(Message(type="assistant", content="最终回答...\n"))
 
-    for mode, chunk in role_3.stream(
+    for mode, chunk in planner_agent.stream(
         input={"messages": state["messages"]},
         stream_mode=["messages", "updates"]
     ):

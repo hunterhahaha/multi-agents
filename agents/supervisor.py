@@ -10,8 +10,9 @@ from time import time
 
 class Supervisor_decision(BaseModel):
     next_node: Literal[
-        "role_1",
-        "chat",
+        "planner",
+        "researcher",
+        "chatter",
         "END"
     ] = Field(description="下一步执行的节点")
     use_reasoner: bool = Field(description="是否使用推理模型")
@@ -31,7 +32,7 @@ def supervisor_node(state: StateMessages):
                 have_answer=bool(state.get("answer")),
                 answer=state.get("answer", ""),
             )),
-            HumanMessage(content=state["question"]),
+            HumanMessage(content=f"问题：{state["question"]}"),
         ]
     )
 

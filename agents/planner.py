@@ -3,7 +3,7 @@
 """
 
 from agents.llm import reasoner_model, chat_model
-from agents.role_prompts import role_1_prompts
+from agents.role_prompts import planner_prompts
 from langchain.messages import SystemMessage, HumanMessage
 from agents.state_messages import StateMessages
 from langgraph.config import get_stream_writer
@@ -18,7 +18,7 @@ def planner_node(state: StateMessages):
     if state["use_reasoner"]:
         thinking = False
         for chunk in reasoner_model.stream(
-            input=[SystemMessage(content=role_1_prompts)] + state["messages"]
+            input=[SystemMessage(content=planner_prompts)] + state["messages"]
         ):
             msg = chunk.additional_kwargs.get('reasoning_content')
             if msg:
@@ -40,7 +40,7 @@ def planner_node(state: StateMessages):
         start_time = time()
         writer(Message(type="assistant", content="问题分析...\n"))
         for chunk in chat_model.stream(
-            input=[('system', role_1_prompts)] + state["messages"] 
+            input=[('system', planner_prompts)] + state["messages"] 
         ):
             response += chunk.content
             writer(Message(type="assistant", content=chunk.content))
