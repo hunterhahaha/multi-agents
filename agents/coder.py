@@ -10,7 +10,7 @@ from langgraph.config import get_stream_writer
 from agents.writer_messages import Message
 from time import time
 
-def role_2_node(state: StateMessages):
+def coder_node(state: StateMessages):
     response = ""
     start_time = time()
     writer = get_stream_writer()  

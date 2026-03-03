@@ -21,7 +21,7 @@ role_3 = create_agent(
 
 from agents.state_messages import StateMessages
 
-def role_3_node(state: StateMessages):
+def executor_node(state: StateMessages):
     response = ""
     writer = get_stream_writer()  
     start_time = time()

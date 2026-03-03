@@ -33,11 +33,11 @@ multi-agents/
 ├── main.py # FastAPI 服务，/chat 接口，流式响应
 ├── graph.py # LangGraph 图定义，节点注册和边连接
 ├── agents/
-│ ├── Supervisor_agent.py # Supervisor 节点
-│ ├── role1.py # Planner 节点
-│ ├── role2.py # Coder 节点
-│ ├── role3.py # Executor 节点
-│ ├── chat_node.py # Chatter 节点
+│ ├── supervisor.py # Supervisor 节点
+│ ├── planner.py # Planner 节点
+│ ├── coder.py # Coder 节点
+│ ├── executor.py # Executor 节点
+│ ├── chatter.py # Chatter 节点
 │ ├── state_messages.py # 全局 State 定义（TypedDict）
 │ ├── role_prompts.py # 所有角色 Prompt 模板
 │ ├── llm.py # LLM 实例（chat_model / reasoner_model）
