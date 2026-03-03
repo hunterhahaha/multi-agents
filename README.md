@@ -29,6 +29,7 @@ chatter → supervisor（完成后汇报）
 - 对话记忆：InMemorySaver checkpoint，同一 thread_id 保持上下文
 
 ### 文件结构
+```
 multi-agents/
 ├── main.py # FastAPI 服务，/chat 接口，流式响应
 ├── graph.py # LangGraph 图定义，节点注册和边连接
@@ -44,7 +45,7 @@ multi-agents/
 │ └── writer_messages.py # 流式消息类型定义
 └── sandbox/
 └── box_langchain.py # Python 代码沙盒工具（subprocess）
-
+```
 
 ---
 
