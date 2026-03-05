@@ -28,13 +28,19 @@ class DeepseekChatModel(BaseModel):
         model_name: 模型名称
         temperature: 模型温度
         """
+        if api_key is None:
+            try:
+                api_key = os.environ.get("DEEPSEEK_API_KEY")
+            except Exception:
+                raise ValueError("DeepseekChatModel初始化失败，api_key不能为空")
+            
+        super().__init__(api_key, api_url, model_name, temperature)
         self.model = init_chat_model(
             model_name=model_name,
             api_key=api_key,
             api_base=api_url,
             temperature=temperature,
         )
-        super().__init__(api_key, api_url, model_name, temperature, self.model)
 
     def _create_instance(self):
-        return super()._create_instance()
+        return self.model

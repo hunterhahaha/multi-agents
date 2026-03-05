@@ -14,7 +14,6 @@ class BaseModel(ABC):
         api_url: str | None = None, 
         model_name: str | None = None,
         temperature: float = 0,
-        _instance: BaseChatModel | None = None,
     ):
         """
         初始化模型
@@ -74,7 +73,7 @@ class BaseModel(ABC):
         """返回模型相关信息"""
         return (
             f"{self.__class__.__name__}"
-            f"(api_key={self.api_key}, api_url={self.api_url}, "
+            f"(api_url={self.api_url}, "
             f"model_name={self.model_name}," 
             f"temperature={self.temperature})"
         )
