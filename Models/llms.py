@@ -13,7 +13,7 @@ http_client = httpx.Client(
 )
 
 chat_model = ChatDeepSeek(
-    model_name=os.environ.get("CHAT_MODEL"),
+    model_name=os.environ.get("DEEPSEEK_MODEL_NAME"),
     api_key=os.environ.get("DEEPSEEK_API_KEY"),
     api_base=os.environ.get("DEEPSEEK_API_URL"),
     temperature=0,
