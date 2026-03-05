@@ -13,7 +13,8 @@ class BaseModel(ABC):
         api_key: str | None, 
         api_url: str | None = None, 
         model_name: str | None = None,
-        temperature: float = 0
+        temperature: float = 0,
+        _instance: BaseChatModel | None = None,
     ):
         """
         初始化模型
