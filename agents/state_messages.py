@@ -3,6 +3,12 @@ from pydantic import Field
 from langchain_core.messages import BaseMessage
 from operator import add
 
+class TaskRecord(TypedDict):
+    worker: str = "" # 执行任务的员工
+    task: str = "" # 员工的任务
+    task_result: str = "" # 任务的结果
+    task_success: bool = False # 任务是否成功完成
+
 class StateMessages(TypedDict):
     """
     参数：
@@ -18,14 +24,16 @@ class StateMessages(TypedDict):
         next_node: 下一个节点，用于存储下一个要执行的节点。
         use_reasoner: 是否需要使用推理模型。
     """
-    question: Annotated[str, Field(default="")]
-    messages: Annotated[List[BaseMessage], add]
+    # 用户层
+    question: str | None # 用户原始问题
+    messages: Annotated[List[BaseMessage], add] | None # 历史对话列表
 
-    code: Annotated[str, Field(default="")]
-    code_result: Annotated[str, Field(default="")]
-    code_error: Annotated[str, Field(default="")]
-    retry_count: Annotated[int, Field(default=0)]
+    # 调度层
+    task: str | None # supervisor 交代给员工的任务
+    next_node: str | None # 下一个要执行的员工节点
 
-    answer: Annotated[str, Field(default="")]
-    next_node: Annotated[str, Field(default="")]
-    use_reasoner: Annotated[bool, Field(default=False)]
+    # 员工返回层
+    task_history: Annotated[List[TaskRecord], add] | None # 存储任务的执行记录
+
+    # 最终输出层
+    answer: str | None # 输出给用户的回答

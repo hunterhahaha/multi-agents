@@ -2,7 +2,7 @@
 职责：处理用户的问题，将用户的问题清晰化和流程化，传递给后续的角色进行代码生成。
 """
 
-from agents.llm import reasoner_model, chat_model
+from llms.llm import reasoner_model, chat_model
 from agents.role_prompts import planner_prompts
 from langchain.messages import SystemMessage, HumanMessage
 from agents.state_messages import StateMessages

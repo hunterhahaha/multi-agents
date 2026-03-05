@@ -53,3 +53,10 @@ def fetch_webpage(url: str) -> str:
         return content
     except Exception as e:
         return f"加载页面内容时出错: {str(e)}"
+    
+@tool
+def final_answer(answer: str) -> str:
+    """
+    用于返回最终答案。
+    """
+    return answer

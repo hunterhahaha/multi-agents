@@ -1,7 +1,7 @@
 import subprocess
 from langchain.tools import tool
 
-@tool
+@tool(description="python代码执行沙盒，仅接受纯字符串")
 def python_code_box(code: str) -> str:
     """
     功能：

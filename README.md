@@ -7,15 +7,16 @@
 ## 当前架构（已完成）
 
 ### 节点结构
-- **supervisor**（`Supervisor_agent.py`）：任务调度核心，基于结构化输出决策下一步节点
-- **planner / role1**（`role1.py`）：需求分析专家，将用户问题拆解为结构化任务规格
-- **coder / role2**（`role2.py`）：代码生成器，使用推理模型生成可执行 Python 代码
-- **executor / role3**（`role3.py`）：代码执行器，调用沙盒工具执行代码并优化回答
-- **chatter / chat_node**（`chat_node.py`）：普通对话处理节点
+- **supervisor**（`supervisor.py`）：任务调度核心，基于结构化输出决策下一步节点
+- **planner**（`planner.py`）：需求分析专家，将用户问题拆解为结构化任务规格（目前弃用）
+- **engineer**（`engineer.py`）：代码生成专家，根据需求规格生成可执行 Python 代码
+- **researcher**（`researcher.py`）：搜索专家，负责在网络上检索相关信息
+- **report**（`report.py`）：结果汇报专家，负责将最终结果以用户友好的方式输出
+- **chatter**（`chatter.py`）：普通对话处理节点
 
 ### 执行流程
 START → supervisor
-supervisor → planner（代码任务）/ chatter（普通对话）/ END（任务完成）
+supervisor → engineer（代码任务）/ researcher（搜索任务）/ chatter（普通对话）/ END（任务完成）
 planner → coder → executor
 executor → supervisor（正常完成，汇报结果）
 executor → coder（代码报错，触发反馈环，最多重试3次）
@@ -36,15 +37,17 @@ multi-agents/
 ├── agents/
 │ ├── supervisor.py # Supervisor 节点
 │ ├── planner.py # Planner 节点
-│ ├── coder.py # Coder 节点
-│ ├── executor.py # Executor 节点
+│ ├── engineer.py # Engineer 节点
+│ ├── researcher.py # Researcher 节点
 │ ├── chatter.py # Chatter 节点
+│ ├── reporter.py # Reporter 节点
 │ ├── state_messages.py # 全局 State 定义（TypedDict）
 │ ├── role_prompts.py # 所有角色 Prompt 模板
 │ ├── llm.py # LLM 实例（chat_model / reasoner_model）
 │ └── writer_messages.py # 流式消息类型定义
 └── sandbox/
 └── box_langchain.py # Python 代码沙盒工具（subprocess）
+
 ```
 
 ---
@@ -60,9 +63,9 @@ multi-agents/
 ### 阶段二：扩展 Agent 能力（中期）
 目标：让各 Agent 具备真正的工具调用能力，而不仅是 LLM 调用链
 
-- [ ] **Researcher Agent**：新增搜索 Agent，集成 Tavily/Serper 等搜索工具
-  - Supervisor 可以在需要外部信息时调度 Researcher
-  - 搜索结果作为上下文传递给 Planner 或直接回答用户
+~~- [ ] **Researcher Agent**：新增搜索 Agent，集成 Tavily/Serper 等搜索工具~~
+  ~~- Supervisor 可以在需要外部信息时调度 Researcher~~
+  ~~- 搜索结果作为上下文传递给 Planner 或直接回答用户~~
 - [ ] **Planner 工具化**：为 planner 添加任务分解工具，支持将复杂任务拆成多个子任务
 - [ ] **沙盒安全加固**：当前 sandbox 使用 subprocess 直接执行，考虑引入 Docker 隔离或 RestrictedPython
 
