@@ -1,340 +1,203 @@
 # Multi-Agents
 
-基于 LangGraph 构建的多智能体系统。系统以「公司」为设计隐喻：**Supervisor 是最高管理者**，负责接收用户任务、制定调度决策；**各 Worker 是职能员工**，各司其职执行具体任务，并将结果汇报回 Supervisor。
+基于 LangGraph 构建的多智能体系统，以**公司分层执行**为设计隐喻：
+
+- 任务从上层进入，逐层分析、审核、拆解
+- 最终产出一份结构化的 `ExecutionPlan`
+- 再由专职调度者按计划驱动 Worker 执行
+
+> **重构说明**：`agents/` 下的现有代码处于过渡期，不代表最终设计，以本文档为准。
 
 ---
 
-## 系统架构
-
-### 整体拓扑：星形调度
+## 架构总览
 
 ```
 用户输入
    ↓
-Supervisor（任务调度中枢）
-   ├──→ Researcher（信息搜索）──→ Supervisor
-   ├──→ Engineer（代码执行）───→ Supervisor
-   ├──→ Reporter（结果整合）───→ Supervisor
-   ├──→ Chatter（普通对话）───→ Supervisor
-   └──→ END
+┌─────────────────────────────────┐
+│  Dispatcher（分拣层）             │  判断是闲聊还是任务；任务才往下走
+└─────────────────────────────────┘
+   ↓ 任务
+┌─────────────────────────────────┐
+│  Planner（规划层）                │  理解目标 → 拆解子任务 → 输出 ExecutionPlan
+└─────────────────────────────────┘
+   ↓ Plan 草稿
+┌─────────────────────────────────┐
+│  Reviewer（审核层）               │  检查 Plan 质量，不合格直接打回 Planner
+└─────────────────────────────────┘
+   ↓ 审核通过
+┌─────────────────────────────────┐
+│  Scheduler（调度层）              │  读 Plan → 找可执行步骤 → 派发 Worker
+│                          ↑      │  Worker 回报 → 更新步骤状态 → 继续或结束
+└─────────────────────────────────┘
+   ↓ / ↑
+┌─────────────────────────────────┐
+│  Workers（执行层）                │  Researcher / Engineer / Analyst / ...
+│  各司其职，结果写入 task_history   │  每个 Worker 完成后回到 Scheduler
+└─────────────────────────────────┘
+   ↓ 全部步骤完成
+Reporter → END
 ```
 
-所有 Worker 执行完成后必须回到 Supervisor，由 Supervisor 根据执行记录决定下一步。任何路径到达 END 之前，**必须经过 Reporter 进行结果整合**，这是架构层的强制约束，不依赖 LLM 的自由裁量。
+**两个关键设计原则：**
+1. **计划与执行分离**：Planner 的产出是显式的 `ExecutionPlan`，Scheduler 只读 Plan 行动，不自行判断
+2. **强制审核关卡**：Reviewer 是架构层的硬约束，Plan 未通过审核则打回重做，不依赖 LLM 自由裁量
 
-### 调度流程
+---
 
-1. 用户输入进入 `Supervisor`
-2. Supervisor 读取 `question` 和历史 `task_history`，决定调用哪个 Worker 及其任务内容
-3. 指定 Worker 执行任务，将结果写入 `task_history` 后返回 Supervisor
-4. Supervisor 根据执行结果决定继续调度或进入 Reporter → END
+## 各层职责
+
+| 角色 | 类型 | 输入 | 输出 |
+|------|------|------|------|
+| **Dispatcher** | 路由节点 | `question` | `next_node`：`planner` 或 `END`（闲聊直接回） |
+| **Planner** | LLM 节点 | `question` + `review_feedback`（重规划时） | `execution_plan` |
+| **Reviewer** | LLM 节点 | `execution_plan` | `review_result`（approved / feedback） |
+| **Scheduler** | 路由节点 | `execution_plan` + `task_history` | `next_node`（Worker 名）+ `task` |
+| **Worker** | LLM 节点 | `task` | `task_history` 追加一条 `TaskRecord` |
+| **Reporter** | LLM 节点 | `task_history` + `question` | `answer` |
 
 ---
 
 ## State 设计
 
-所有节点共享同一个 `StateMessages`，分为四层：
-
 ```python
+# ── 核心数据结构 ────────────────────────────────────────────
+
+class TaskRecord(TypedDict):
+    worker: str
+    task: str
+    task_result: str
+    task_success: bool
+
+class ExecutionStep(TypedDict):
+    step_id: str              # 唯一 ID，如 "step_1"
+    description: str          # 任务描述（传给 Worker 的 task 字段）
+    assigned_worker: str      # Worker 名，必须在 WorkerRegistry 中注册
+    dependencies: List[str]   # 前置步骤 step_id 列表，为空表示可立即执行
+    status: str               # pending | running | done | failed
+
+class ExecutionPlan(TypedDict):
+    objective: str            # 本次任务目标，一句话概括
+    steps: List[ExecutionStep]
+
+class ReviewResult(TypedDict):
+    approved: bool
+    feedback: str             # 不通过时的具体意见，传回 Planner 重规划
+    retry_count: int          # 防止无限循环，>= 2 时强制放行
+
+# ── 全局 State ──────────────────────────────────────────────
+
 class StateMessages(TypedDict):
     # 用户层
-    question: str | None                               # 用户原始问题
-    messages: Annotated[List[BaseMessage], add]        # 多轮对话历史
+    question: str | None
+    messages: Annotated[List[BaseMessage], add]
+
+    # 规划层
+    execution_plan: ExecutionPlan | None
+
+    # 审核层
+    review_result: ReviewResult | None
 
     # 调度层
-    task: str | None                                   # Supervisor 派发给当前 Worker 的任务
-    next_node: str | None                              # 下一个执行的节点名称
+    task: str | None
+    next_node: str | None
 
     # 执行层
-    task_history: Annotated[List[TaskRecord], add]     # 所有已完成任务的执行记录
+    task_history: Annotated[List[TaskRecord], add]
 
     # 输出层
-    answer: str | None                                 # Reporter 写入的最终答案
-```
-
-`TaskRecord` 是每个 Worker 的标准化汇报格式：
-
-```python
-class TaskRecord(TypedDict):
-    worker: str        # 执行者名称
-    task: str          # 任务描述
-    task_result: str   # 任务结果
-    task_success: bool # 是否成功完成
+    answer: str | None
 ```
 
 ---
 
-## 模型层设计
+## Graph 拓扑
 
-### 设计原则
+Graph 分为两个阶段，拓扑语义不同：
 
-模型类是**参数容器 + 工厂**，职责只有一个：持有构建 LangChain 模型实例所需的所有参数，并通过 `build()` 返回可用的实例。**调用逻辑不属于模型层**，由 Worker 层负责。
-
-### `BaseModel` — 模型配置基类
-
-```python
-class BaseModel(ABC):
-    DEFAULT_API_URL: str = ""       # 子类覆盖，提供厂商默认地址
-    DEFAULT_MODEL_NAME: str = ""    # 子类覆盖，提供默认模型名称
-
-    def __init__(self, api_key, api_url=None, model_name=None, temperature=0):
-        # api_key 为空直接抛异常，不 return e
-        # api_url / model_name 为 None 时自动使用子类的 DEFAULT_*
-        ...
-
-    @abstractmethod
-    def _create_instance(self) -> BaseChatModel:
-        """子类实现：返回具体的 LangChain 模型实例"""
-        pass
-
-    def build(self) -> BaseChatModel:
-        """第一次调用时创建实例并缓存，之后复用同一个实例"""
-        if self._instance is None:
-            self._instance = self._create_instance()
-        return self._instance
-
-    def rebuild(self) -> BaseChatModel:
-        """强制重建实例，用于参数变更后刷新"""
-        self._instance = None
-        return self.build()
+```
+# 分析阶段（有向无环）
+dispatcher → planner → reviewer
+                ↑           │ 封驳
+                └───────────┘
+                            │ 准奏
+                            ↓
+# 执行阶段（循环）
+                        scheduler ──→ worker_A ──┐
+                            ↑                    │
+                            └────────────────────┘
+                            │ 所有步骤完成
+                            ↓
+                        reporter → END
 ```
 
-`build()` 的核心价值：同一份配置在多个 Worker 中共享时，只创建一次实例，所有人复用；`rebuild()` 统一刷新，不需要逐处重建。
-
-### 厂商子类示例：`DeepseekChatModel`
+`graph.py` 只做拓扑配置，不含业务逻辑：
 
 ```python
-class DeepseekChatModel(BaseModel):
-    DEFAULT_API_URL = "https://api.deepseek.com/v1"
-    DEFAULT_MODEL_NAME = "deepseek-chat"
+# 分析阶段
+graph.add_node("dispatcher", dispatcher_node)
+graph.add_node("planner", planner_node)
+graph.add_node("reviewer", reviewer_node)
+graph.add_edge(START, "dispatcher")
+graph.add_conditional_edges("dispatcher", dispatcher_router)   # → planner | END
+graph.add_edge("planner", "reviewer")
+graph.add_conditional_edges("reviewer", reviewer_router)       # → planner | scheduler
 
-    def __init__(self, api_key=None, api_url=None, model_name=None, temperature=0):
-        # api_key 优先用传入值，否则从环境变量读取
-        api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
-        super().__init__(api_key, api_url, model_name, temperature)
-
-        # 使用 self.* 而非原始参数，确保 DEFAULT_* 默认值已生效
-        self.model = init_chat_model(
-            model_name=self.model_name,
-            api_key=self.api_key,
-            api_base=self.api_url,
-            temperature=self.temperature,
-        )
-
-    def _create_instance(self):
-        return self.model
-```
-
-### 模块级单例
-
-实际使用时在 `Models/` 底部直接创建实例，所有文件 import 同一个对象（Python 模块天然单例）：
-
-```python
-# Models/Deepseek.py 底部
-chat_model = DeepseekChatModel()
-reasoner_model = DeepseekChatModel(model_name="deepseek-reasoner", temperature=1.0)
-```
-
-```python
-# 任意 Worker 文件
-from Models.Deepseek import chat_model, reasoner_model
-```
-
----
-
-## Worker 系统设计
-
-### 设计原则
-
-所有 Worker 的执行骨架完全相同，差异只在提示词和工具。采用 **Template Method 模式**：骨架写在基类，变化点通过钩子留给子类。
-
-**终止条件和业务约束（如最大重试次数）交给提示词和工具管理**，不放在基类骨架里，保持基类的纯粹性。
-
-### 工具调用机制
-
-Worker 通过 LangChain 的 `bind_tools` 让 LLM 感知工具列表。LLM 需要调用工具时返回 `tool_calls`，不需要时返回 `content` 作为最终结果。每次 `invoke` 对 LLM 来说是独立的，通过 `ctx.history` 把上一轮工具结果传入，实现多轮工具调用的连贯性。
-
-工具 dispatch 使用**名称查找表**（方案 A），新增工具无需修改任何 `if/elif`：
-
-```python
-tool_map = {tool.name: tool for tool in self.tools}
-result = tool_map[tool_call["name"]].invoke(tool_call["args"])
-```
-
-### `WorkerContext` — 执行上下文
-
-Worker 执行期间的临时状态不污染全局 State，统一用 Context 对象承载：
-
-```python
-class WorkerContext:
-    def __init__(self):
-        self.history: list = []      # 本轮循环内积累的消息（工具结果追加在此）
-        self.task_result: str = ""
-        self.task_success: bool = False
-```
-
-有额外内部状态的 Worker 通过继承扩展，不需要新的基类分支：
-
-```python
-class EngineerContext(WorkerContext):
-    def __init__(self):
-        super().__init__()
-        self.code: str = ""
-        self.code_result: str = ""
-```
-
-### `BaseWorker` — 执行骨架
-
-```python
-class BaseWorker(ABC):
-
-    # ── 子类必须声明 ──────────────────────────────
-    name: str            # Worker 标识，对应 graph 节点名和 TaskRecord.worker
-    description: str     # 供 WorkerRegistry 动态生成 supervisor prompt 用
-    prompt: str          # 提示词
-    tools: list = []     # 工具列表，无工具的 Worker 保持空列表
-    model_config = ...   # 指向 Models/ 里的某个模型实例
-
-    # ── 可覆盖的钩子（子类按需重写）──────────────
-    def create_context(self, state) -> WorkerContext:
-        return WorkerContext()
-
-    def build_input(self, state, ctx) -> list:
-        return [SystemMessage(self.prompt), *ctx.history, HumanMessage(state["task"])]
-
-    def on_tool_result(self, tool_call, result, ctx):
-        ctx.history.append(ToolMessage(
-            content=str(result),
-            tool_call_id=tool_call["id"]
-        ))
-
-    # ── 不可覆盖的执行骨架 ────────────────────────
-    def run(self, state) -> dict:
-        ctx = self.create_context(state)
-        tool_map = {tool.name: tool for tool in self.tools}
-
-        model = self.model_config.build()
-        if self.tools:
-            model = model.bind_tools(self.tools)
-
-        try:
-            while True:
-                response = model.invoke(self.build_input(state, ctx))
-
-                # 无 tool_calls：LLM 认为任务完成，直接用 content 作为结果
-                if not response.tool_calls:
-                    ctx.task_result = response.content or ""
-                    ctx.task_success = bool(response.content)
-                    break
-
-                tool_call = response.tool_calls[0]
-                result = tool_map[tool_call["name"]].invoke(tool_call["args"])
-                self.on_tool_result(tool_call, result, ctx)
-
-        except Exception as e:
-            ctx.task_result = str(e)
-            ctx.task_success = False
-
-        return {"task_history": [TaskRecord(
-            worker=self.name,
-            task=state["task"],
-            task_result=ctx.task_result,
-            task_success=ctx.task_success,
-        )]}
-```
-
-### 各 Worker 覆盖哪些钩子
-
-| Worker | `create_context` | `build_input` | `on_tool_result` |
-|--------|:-:|:-:|:-:|
-| ChatterWorker | ✗ | ✗ | ✗ |
-| ResearcherWorker | ✗ | ✗ | ✗ |
-| ReporterWorker | ✗ | ✅ 需要拼入 task_history | ✗ |
-| EngineerWorker | ✅ 返回 EngineerContext | ✅ 带代码状态 | ✅ 更新 code 字段 |
-
-### Worker 子类示例
-
-**最简 Worker（只需声明，无需覆盖）：**
-
-```python
-class ResearcherWorker(BaseWorker):
-    name = "researcher"
-    description = "需要搜索最新网络信息时使用"
-    prompt = researcher_prompts
-    tools = [searxng_search, fetch_webpage]
-    model_config = chat_model
-```
-
-**复杂 Worker（覆盖差异化钩子）：**
-
-```python
-class EngineerWorker(BaseWorker):
-    name = "engineer"
-    description = "需要编写并执行 Python 代码时使用"
-    prompt = engineer_prompts
-    tools = [python_code_box]
-    model_config = reasoner_model
-
-    def create_context(self, state):
-        return EngineerContext()
-
-    def build_input(self, state, ctx: EngineerContext):
-        return [
-            SystemMessage(self.prompt),
-            HumanMessage(f"任务：{state['task']}"),
-            HumanMessage(f"上一轮代码：{ctx.code}"),
-            HumanMessage(f"上一轮结果：{ctx.code_result}"),
-        ]
-
-    def on_tool_result(self, tool_call, result, ctx: EngineerContext):
-        super().on_tool_result(tool_call, result, ctx)
-        ctx.code = tool_call["args"].get("code", "")
-        ctx.code_result = result
-```
-
----
-
-## WorkerRegistry — 中心化注册
-
-Worker 的名称、描述、节点函数统一在 Registry 管理，消除在 `graph.py`、`supervisor.py`、`role_prompts.py` 三处写死的问题：
-
-```python
-class WorkerRegistry:
-    @classmethod
-    def register(cls, worker: BaseWorker): ...
-
-    @classmethod
-    def get_supervisor_choices(cls) -> str:
-        """动态生成 supervisor prompt 里的 node_choices 描述"""
-
-    @classmethod
-    def get_all_nodes(cls) -> list[tuple[str, Callable]]:
-        """供 graph.py 批量注册节点"""
-```
-
-`graph.py` 变为纯拓扑配置，新增 Worker 零改动旧代码：
-
-```python
-WorkerRegistry.register(ResearcherWorker())
-WorkerRegistry.register(EngineerWorker())
-WorkerRegistry.register(ReporterWorker())
-WorkerRegistry.register(ChatterWorker())
+# 执行阶段
+graph.add_node("scheduler", scheduler_node)
+graph.add_node("reporter", reporter_node)
+graph.add_conditional_edges("scheduler", scheduler_router)     # → worker_X | reporter
 
 for name, fn in WorkerRegistry.get_all_nodes():
     graph.add_node(name, fn)
-    graph.add_edge(name, "supervisor")
+    graph.add_edge(name, "scheduler")                          # 所有 Worker 回 Scheduler
+
+graph.add_edge("reporter", END)
 ```
 
 ---
 
-## 变化点隔离总结
+## Worker 系统
 
-| 想改什么 | 改哪里 | 影响范围 |
-|---------|--------|---------|
-| 执行骨架、错误处理 | `BaseWorker.run` | 所有 Worker 自动生效 |
-| 某个 Worker 的特殊逻辑 | 对应 `XxxContext` + 钩子方法 | 只影响该 Worker |
-| 新增 Worker | 新建一个类，Registry 注册 | 零改动旧代码 |
-| 切换或新增模型 | `Models/` 对应配置类 | 一处生效 |
-| Supervisor 可调度的节点列表 | `WorkerRegistry` | 自动同步到 graph 和 prompt |
+Worker 设计沿用**模板方法模式**，骨架不变，差异通过钩子实现。
+
+```
+BaseWorker
+├── name / description / prompt / tools / model_config（子类声明）
+├── create_context()   → WorkerContext（可覆盖）
+├── build_input()      → List[Message]（可覆盖）
+├── on_tool_result()   → 工具结果处理（可覆盖）
+└── run()              → 不可覆盖，执行骨架
+```
+
+新增 Worker 只需声明四个字段 + Registry 注册，零改动旧代码：
+
+```python
+class MyWorker(BaseWorker):
+    name = "my_worker"
+    description = "描述这个 Worker 的用途，供 Planner 感知"
+    prompt = my_prompt
+    tools = [some_tool]
+    model_config = chat_model
+
+WorkerRegistry.register(MyWorker())
+```
+
+> **未来扩展**：`WorkerRegistry` 设计支持运行时动态注册，为后续「自由创建 Worker」功能预留接口。
+
+---
+
+## 模型层
+
+模型类是**参数容器 + 工厂**，只负责持有配置和返回实例，调用逻辑由 Worker 负责。
+
+```python
+# 使用方式：模块级单例，全局复用
+from Models.Deepseek import chat_model, reasoner_model
+```
+
+新增厂商只需继承 `BaseModel`，覆盖 `DEFAULT_API_URL` / `DEFAULT_MODEL_NAME` / `_create_instance()`。
 
 ---
 
@@ -343,38 +206,56 @@ for name, fn in WorkerRegistry.get_all_nodes():
 ```
 multi-agents/
 ├── Models/
-│   ├── Base.py               # BaseModel 基类
-│   ├── Deepseek.py           # DeepseekChatModel + 模块级实例
-│   └── llms.py               # 过渡期兼容，后续由 Models/ 统一替代
+│   ├── base.py                  # BaseModel 基类
+│   └── deepseek.py              # DeepseekChatModel + 模块级单例
+│
 ├── agents/
-│   ├── base_worker.py        # BaseWorker + WorkerContext
-│   ├── worker_registry.py    # WorkerRegistry
-│   ├── workers/
-│   │   ├── researcher.py
-│   │   ├── engineer.py
-│   │   ├── reporter.py
-│   │   └── chatter.py
-│   ├── supervisor.py
-│   ├── state_messages.py
-│   └── role_prompts.py
+│   ├── state.py                 # 所有 TypedDict：TaskRecord / ExecutionStep / ExecutionPlan / ReviewResult / StateMessages
+│   ├── base_worker.py           # BaseWorker + WorkerContext
+│   ├── worker_registry.py       # WorkerRegistry
+│   │
+│   ├── pipeline/                # 分析-审核管线（非 Worker 角色）
+│   │   ├── dispatcher.py        # 分拣：闲聊 vs 任务
+│   │   ├── planner.py           # 规划：生成 ExecutionPlan
+│   │   ├── reviewer.py          # 审核：准奏 / 封驳
+│   │   └── scheduler.py         # 调度：读 Plan 派发 Worker
+│   │
+│   └── workers/                 # 执行层 Worker
+│       ├── researcher.py
+│       ├── engineer.py
+│       ├── reporter.py
+│       └── chatter.py
+│
 ├── tools/
 │   └── web_tools.py
+│
 ├── sandbox/
 │   └── box_langchain.py
-├── graph.py                  # 纯拓扑配置，不含业务逻辑
+│
+├── graph.py                     # 纯拓扑配置
 └── main.py
 ```
 
 ---
 
+## 变化点隔离
+
+| 想改什么 | 改哪里 | 影响范围 |
+|---------|--------|---------|
+| 执行骨架、错误处理 | `BaseWorker.run` | 所有 Worker 自动生效 |
+| 某个 Worker 的特殊逻辑 | 对应钩子方法 | 只影响该 Worker |
+| **新增 Worker** | 新建类 + Registry 注册 | 零改动旧代码 |
+| Reviewer 审核标准 | `reviewer.py` 的 prompt | 只影响审核层 |
+| Planner 规划策略 | `planner.py` 的 prompt | 只影响规划层 |
+| 切换模型 | `Models/` 对应配置 | 一处生效 |
+| Graph 拓扑 | `graph.py` | 只影响流向 |
+
+---
+
 ## 扩展路径
 
-当前系统是**扁平公司结构**，Supervisor 直管所有 Worker，适合当前规模。当 Worker 数量显著增长时，可引入「部门」层级：
+**当前阶段**：单 Planner 生成完整 Plan，Scheduler 串行/依赖调度。
 
-```
-Supervisor
-├── 信息部门 Lead → Researcher, WebScraper, ...
-└── 工程部门 Lead → Engineer, DataAnalyst, ...
-```
+**下一阶段**（Worker 数量增多时）：Planner 可拆分为 Director + 多个 DeptPlanner 并行分析，汇总后再统一出 Plan。
 
-`BaseWorker` 和 `WorkerRegistry` 的设计天然支持这种扩展，无需重构底层。
+**未来**：`WorkerRegistry` 支持运行时动态注册，实现「按需创建 Worker」。
