@@ -1,10 +1,17 @@
 # Multi-Agents
 
-基于 LangGraph 构建的多智能体系统，以**公司分层执行**为设计隐喻：
+> 基于 LangGraph 构建的多智能体协作系统，使用 LangChain Core 基础设施实现各智能体能力，追求轻量、可控、易扩展。
 
-- 任务从上层进入，逐层分析、审核、拆解
-- 最终产出一份结构化的 `ExecutionPlan`
-- 再由专职调度者按计划驱动 Worker 执行
+---
+
+## 项目简介
+
+本项目是前代 `multi_agents` 的延续与重构。核心思路是将一个复杂任务的完整生命周期——从意图识别、任务规划、质量审核，到并行调度执行、结果汇总——拆分给职责清晰的智能体分层承担，形成一条可靠的流水线。
+
+**为什么不直接用 LangChain 的高层 API（如 `create_agent`）？**
+
+1. **工程能力锻炼**：主动放弃便捷封装，仅使用 LangChain Core 的基础类进行设计，以培养底层工程化思维。
+2. **性能考量**：实测中高层 API 较为臃肿，通过自主设计可针对实际场景做定制优化。
 
 > **重构说明**：`agents/` 下的现有代码处于过渡期，不代表最终设计，以本文档为准。
 
@@ -16,151 +23,167 @@
 用户输入
    ↓
 ┌─────────────────────────────────┐
-│  Dispatcher（分拣层）             │  判断是闲聊还是任务；任务才往下走
+│  Dispatcher（分拣层）            │  判断是闲聊还是任务；任务才往下走
 └─────────────────────────────────┘
    ↓ 任务
 ┌─────────────────────────────────┐
-│  Planner（规划层）                │  理解目标 → 拆解子任务 → 输出 ExecutionPlan
+│  Planner（规划层）               │  理解目标 → 拆解子任务 → 输出 DAG 规划表
 └─────────────────────────────────┘
-   ↓ Plan 草稿
+   ↓ 规划草稿
 ┌─────────────────────────────────┐
-│  Reviewer（审核层）               │  检查 Plan 质量，不合格直接打回 Planner
+│  Reviewer（审核层）              │  检查规划质量，不合格直接打回 Planner 重做
 └─────────────────────────────────┘
    ↓ 审核通过
 ┌─────────────────────────────────┐
-│  Scheduler（调度层）              │  读 Plan → 找可执行步骤 → 派发 Worker
-│                          ↑      │  Worker 回报 → 更新步骤状态 → 继续或结束
+│  Scheduler（调度层）             │  扫描 DAG → 找可执行节点 → 并行派发 Worker
+│                         ↑       │  Worker 回报 → 更新节点状态 → 继续或结束
 └─────────────────────────────────┘
    ↓ / ↑
 ┌─────────────────────────────────┐
-│  Workers（执行层）                │  Researcher / Engineer / Analyst / ...
-│  各司其职，结果写入 task_history   │  每个 Worker 完成后回到 Scheduler
+│  Workers（执行层）               │  各司其职，结果写入对应任务节点的 output
 └─────────────────────────────────┘
-   ↓ 全部步骤完成
+   ↓ 全部节点完成
 Reporter → END
 ```
 
-**两个关键设计原则：**
-1. **计划与执行分离**：Planner 的产出是显式的 `ExecutionPlan`，Scheduler 只读 Plan 行动，不自行判断
-2. **强制审核关卡**：Reviewer 是架构层的硬约束，Plan 未通过审核则打回重做，不依赖 LLM 自由裁量
+**两个核心设计原则：**
+
+1. **计划与执行分离**：Planner 的产出是显式的 DAG 规划表，Scheduler 只读 DAG 行动，不自行判断
+2. **强制审核关卡**：Reviewer 是架构层的硬约束，规划未通过审核则打回重做，不依赖 LLM 自由裁量
 
 ---
 
 ## 各层职责
 
-| 角色 | 类型 | 输入 | 输出 |
-|------|------|------|------|
-| **Dispatcher** | 路由节点 | `question` | `next_node`：`planner` 或 `END`（闲聊直接回） |
-| **Planner** | LLM 节点 | `question` + `review_feedback`（重规划时） | `execution_plan` |
-| **Reviewer** | LLM 节点 | `execution_plan` | `review_result`（approved / feedback） |
-| **Scheduler** | 路由节点 | `execution_plan` + `task_history` | `next_node`（Worker 名）+ `task` |
-| **Worker** | LLM 节点 | `task` | `task_history` 追加一条 `TaskRecord` |
-| **Reporter** | LLM 节点 | `task_history` + `question` | `answer` |
+| 角色 | 类型 | 接收 | 产出 |
+|---|---|---|---|
+| **Dispatcher** | 路由节点 | 用户输入 | 闲聊直接回复 / 任务传递给 Planner |
+| **Planner** | LLM 节点 | 用户任务 + Reviewer 反馈（重规划时）| DAG 规划表 |
+| **Reviewer** | LLM 节点 | DAG 规划表 + 原始任务 | 审核通过 / 意见反馈（打回 Planner）|
+| **Scheduler** | 路由节点 | 审核通过的 DAG | 触发 Worker 执行 / 汇聚结果 |
+| **Worker** | LLM 节点 | 任务描述 + 前置输入 | 执行结果（写入 DAG 节点 output）|
+| **Reporter** | LLM 节点 | 所有 Worker 输出聚合 | 最终报告 |
 
 ---
 
-## State 设计
+## 核心数据结构
+
+### 任务状态枚举
 
 ```python
-# ── 核心数据结构 ────────────────────────────────────────────
+class TaskStatus(str, Enum):
+    PENDING  = "pending"   # 等待前置任务完成
+    READY    = "ready"     # 前置任务已完成，等待执行
+    RUNNING  = "running"   # 正在执行
+    DONE     = "done"      # 已完成
+    FAILURE  = "failure"   # 执行失败
+```
 
-class TaskRecord(TypedDict):
-    worker: str
-    task: str
-    task_result: str
-    task_success: bool
+### DAG 任务节点
 
-class ExecutionStep(TypedDict):
-    step_id: str              # 唯一 ID，如 "step_1"
-    description: str          # 任务描述（传给 Worker 的 task 字段）
-    assigned_worker: str      # Worker 名，必须在 WorkerRegistry 中注册
-    dependencies: List[str]   # 前置步骤 step_id 列表，为空表示可立即执行
-    status: str               # pending | running | done | failed
+```python
+class TaskNode(BaseModel):
+    task_id:      str                    # 任务 ID
+    worker:       Optional[WorkerName]   # 负责执行的 Worker
+    description:  str                    # 任务描述
+    dependencies: list[str]              # 前置任务 ID 列表
+    status:       TaskStatus             # 当前状态
+    input_from:   list[str]              # 输入来源（前置任务 ID）
+    input_data:   list[str]              # 实际输入数据（由 Scheduler 填充）
+    output:       Optional[str]          # 执行结果
+```
 
-class ExecutionPlan(TypedDict):
-    objective: str            # 本次任务目标，一句话概括
-    steps: List[ExecutionStep]
+### 全局 Graph 状态
 
-class ReviewResult(TypedDict):
-    approved: bool
-    feedback: str             # 不通过时的具体意见，传回 Planner 重规划
-    retry_count: int          # 防止无限循环，>= 2 时强制放行
-
-# ── 全局 State ──────────────────────────────────────────────
-
-class StateMessages(TypedDict):
-    # 用户层
-    question: str | None
-    messages: Annotated[List[BaseMessage], add]
-
-    # 规划层
-    execution_plan: ExecutionPlan | None
-
-    # 审核层
-    review_result: ReviewResult | None
-
-    # 调度层
-    task: str | None
-    next_node: str | None
-
-    # 执行层
-    task_history: Annotated[List[TaskRecord], add]
-
-    # 输出层
-    answer: str | None
+```python
+class GraphState(TypedDict):
+    # 长期记忆（跨轮对话保留）
+    messages_history: Annotated[list[BaseMessage], add_messages]
+    # 任务级记忆（任务结束后销毁）
+    intent_judge:    NotRequired[Literal["chat", "task"]]
+    chat_reply:      NotRequired[str]
+    task:            NotRequired[str]
+    plan:            NotRequired[DAG]
+    review:          NotRequired[str]
+    is_return:       NotRequired[bool]
+    return_count:    NotRequired[int]    # Reviewer 打回次数，上限为 5
+    reviewed_plan:   NotRequired[DAG]
+    workers_output:  NotRequired[list[WorkerOutput]]
+    report:          NotRequired[str]
 ```
 
 ---
 
-## Graph 拓扑
+## DAG 示例
 
-Graph 分为两个阶段，拓扑语义不同：
+以一个完整的软件项目开发流程为例：
 
+```mermaid
+graph TD
+    A[001：需求调研立项<br/>负责：需求方案设计师] --> B[002：方案原型设计<br/>负责：UI/原型设计师]
+    B --> C[003：前端开发<br/>负责：前端开发工程师]
+    B --> D[004：后端开发<br/>负责：后端开发工程师]
+    B --> E[005：测试用例编写<br/>负责：测试工程师]
+    B --> G[006：测试环境部署<br/>负责：运维部署工程师]
+    C & D --> F[007：前后端联调<br/>负责：前端开发工程师]
+    F & E & G --> H[008：系统功能测试<br/>负责：测试工程师]
+    F --> I[009：上线方案制定<br/>负责：运维部署工程师]
+    H & I --> J[010：正式上线部署<br/>负责：运维部署工程师]
+    J --> K[011：验收复盘总结<br/>负责：项目经理]
+
+    subgraph 并行任务组一
+    C
+    D
+    E
+    G
+    end
+
+    subgraph 并行任务组二
+    H
+    I
+    end
 ```
-# 分析阶段（有向无环）
-dispatcher → planner → reviewer
-                ↑           │ 封驳
-                └───────────┘
-                            │ 准奏
-                            ↓
-# 执行阶段（循环）
-                        scheduler ──→ worker_A ──┐
-                            ↑                    │
-                            └────────────────────┘
-                            │ 所有步骤完成
-                            ↓
-                        reporter → END
-```
 
-`graph.py` 只做拓扑配置，不含业务逻辑：
+---
 
-```python
-# 分析阶段
-graph.add_node("dispatcher", dispatcher_node)
-graph.add_node("planner", planner_node)
-graph.add_node("reviewer", reviewer_node)
-graph.add_edge(START, "dispatcher")
-graph.add_conditional_edges("dispatcher", dispatcher_router)   # → planner | END
-graph.add_edge("planner", "reviewer")
-graph.add_conditional_edges("reviewer", reviewer_router)       # → planner | scheduler
+## Scheduler 调度机制
 
-# 执行阶段
-graph.add_node("scheduler", scheduler_node)
-graph.add_node("reporter", reporter_node)
-graph.add_conditional_edges("scheduler", scheduler_router)     # → worker_X | reporter
+Scheduler 采用**事件驱动 + 扫描轮询**的方式动态调度任务：
 
-for name, fn in WorkerRegistry.get_all_nodes():
-    graph.add_node(name, fn)
-    graph.add_edge(name, "scheduler")                          # 所有 Worker 回 Scheduler
+1. 收到审核通过的 DAG，扫描所有节点，将 `dependencies` 为空的节点标为 `READY`，批量触发
+2. 每当一个 Worker 完成并回调后，重新扫描未完成节点的 `dependencies`
+3. 若某节点的所有前置任务均为 `DONE`，则标为 `READY` 并触发执行
+4. 重复上述过程直到所有节点完成，结果聚合后转交 Reporter
 
-graph.add_edge("reporter", END)
-```
+> LangGraph 中多节点并行合并时存在状态竞争，通过 `add_messages` 等 reducer 机制处理。
+
+---
+
+## 关键设计决策
+
+### Planner 如何规范输出 DAG？
+
+| 方案 | 描述 | 评价 |
+|---|---|---|
+| `with_structured_output` | LangChain 结构化输出约束 | 高效，依赖模型能力 |
+| Prompt 约束 | 通过提示词规范输出格式 | 灵活，稳定性稍弱 |
+| 工具调用 | LLM 逐个调用工具创建节点 | 最可靠，但耗时和 token 消耗较大 |
+
+**当前策略**：方案 1 + 2 结合使用。
+
+### 任务执行失败如何处理？
+
+| 方案 | 描述 |
+|---|---|
+| 终止 DAG | 遇到失败直接终止整个流程 |
+| SKIPPED 状态 | 跳过失败任务，继续执行后续独立节点 |
+| 人工干预 | 询问用户是否重试该任务（**当前倾向方案**）|
 
 ---
 
 ## Worker 系统
 
-Worker 设计沿用**模板方法模式**，骨架不变，差异通过钩子实现。
+Worker 设计沿用**模板方法模式**，骨架固定，差异通过钩子实现。
 
 ```
 BaseWorker
@@ -184,20 +207,7 @@ class MyWorker(BaseWorker):
 WorkerRegistry.register(MyWorker())
 ```
 
-> **未来扩展**：`WorkerRegistry` 设计支持运行时动态注册，为后续「自由创建 Worker」功能预留接口。
-
----
-
-## 模型层
-
-模型类是**参数容器 + 工厂**，只负责持有配置和返回实例，调用逻辑由 Worker 负责。
-
-```python
-# 使用方式：模块级单例，全局复用
-from Models.Deepseek import chat_model, reasoner_model
-```
-
-新增厂商只需继承 `BaseModel`，覆盖 `DEFAULT_API_URL` / `DEFAULT_MODEL_NAME` / `_create_instance()`。
+> `WorkerRegistry` 支持运行时动态注册，为后续「按需创建 Worker」功能预留接口。
 
 ---
 
@@ -210,15 +220,15 @@ multi-agents/
 │   └── deepseek.py              # DeepseekChatModel + 模块级单例
 │
 ├── agents/
-│   ├── state.py                 # 所有 TypedDict：TaskRecord / ExecutionStep / ExecutionPlan / ReviewResult / StateMessages
+│   ├── state.py                 # 所有数据结构：TaskNode / DAG / GraphState 等
 │   ├── base_worker.py           # BaseWorker + WorkerContext
 │   ├── worker_registry.py       # WorkerRegistry
 │   │
-│   ├── pipeline/                # 分析-审核管线（非 Worker 角色）
-│   │   ├── dispatcher.py        # 分拣：闲聊 vs 任务
-│   │   ├── planner.py           # 规划：生成 ExecutionPlan
-│   │   ├── reviewer.py          # 审核：准奏 / 封驳
-│   │   └── scheduler.py         # 调度：读 Plan 派发 Worker
+│   ├── pipeline/                # 非 Worker 角色（分析-审核-调度管线）
+│   │   ├── dispatcher.py
+│   │   ├── planner.py
+│   │   ├── reviewer.py
+│   │   └── scheduler.py
 │   │
 │   └── workers/                 # 执行层 Worker
 │       ├── researcher.py
@@ -229,9 +239,6 @@ multi-agents/
 ├── tools/
 │   └── web_tools.py
 │
-├── sandbox/
-│   └── box_langchain.py
-│
 ├── graph.py                     # 纯拓扑配置
 └── main.py
 ```
@@ -241,10 +248,10 @@ multi-agents/
 ## 变化点隔离
 
 | 想改什么 | 改哪里 | 影响范围 |
-|---------|--------|---------|
+|---|---|---|
 | 执行骨架、错误处理 | `BaseWorker.run` | 所有 Worker 自动生效 |
-| 某个 Worker 的特殊逻辑 | 对应钩子方法 | 只影响该 Worker |
-| **新增 Worker** | 新建类 + Registry 注册 | 零改动旧代码 |
+| 某 Worker 的特殊逻辑 | 对应钩子方法 | 只影响该 Worker |
+| 新增 Worker | 新建类 + Registry 注册 | 零改动旧代码 |
 | Reviewer 审核标准 | `reviewer.py` 的 prompt | 只影响审核层 |
 | Planner 规划策略 | `planner.py` 的 prompt | 只影响规划层 |
 | 切换模型 | `Models/` 对应配置 | 一处生效 |
@@ -254,8 +261,23 @@ multi-agents/
 
 ## 扩展路径
 
-**当前阶段**：单 Planner 生成完整 Plan，Scheduler 串行/依赖调度。
+**当前阶段**：单 Planner 生成完整 DAG，Scheduler 按依赖关系动态调度。
 
-**下一阶段**（Worker 数量增多时）：Planner 可拆分为 Director + 多个 DeptPlanner 并行分析，汇总后再统一出 Plan。
+**下一阶段**：Worker 数量增多时，Planner 可拆分为 Director + 多个子 Planner 并行分析，汇总后统一出 DAG。
 
 **未来**：`WorkerRegistry` 支持运行时动态注册，实现「按需创建 Worker」。
+
+---
+
+## 技术栈
+
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** — 多智能体工作流管理
+- **[LangChain Core](https://github.com/langchain-ai/langchain)** — 基础设施（Messages、BaseModel 等）
+- **[Pydantic](https://docs.pydantic.dev/)** — 数据结构与校验
+- **Python 3.11+**
+
+---
+
+## License
+
+MIT
