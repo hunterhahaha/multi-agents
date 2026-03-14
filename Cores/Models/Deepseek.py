@@ -1,6 +1,6 @@
 """Deepseek模型"""
 
-from langchain.chat_models import init_chat_model
+from langchain_deepseek import ChatDeepSeek
 from .Base import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
@@ -31,7 +31,7 @@ class DeepseekChatModel(BaseModel):
         api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
         super().__init__(api_key, api_url, model_name, temperature)
         
-        self.model = init_chat_model(
+        self.model = ChatDeepSeek(
             model_name=self.model_name,
             api_key=self.api_key,
             api_base=self.api_url,

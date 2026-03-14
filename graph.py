@@ -4,7 +4,7 @@ from agents.planner import planner_node
 from agents.engineer import engineer_node
 from temp.executor import executor_node
 from agents.chatter import chat_node
-from agents.supervisor import supervisor_node
+from Workers.supervisor import supervisor_node
 from agents.researcher import researcher_node
 from agents.reporter import reporter_node
 from langgraph.checkpoint.memory import InMemorySaver
