@@ -281,18 +281,3 @@ multi-agents/
 ## License
 
 MIT
-
----
-
-## 技术栈
-
-- **[LangGraph](https://github.com/langchain-ai/langgraph)** — 多智能体工作流管理
-- **[LangChain Core](https://github.com/langchain-ai/langchain)** — 基础设施（Messages、BaseModel 等）
-- **[Pydantic](https://docs.pydantic.dev/)** — 数据结构与校验
-- **Python 3.11+**
-
----
-
-## License
-
-MIT
