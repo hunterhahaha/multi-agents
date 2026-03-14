@@ -1,49 +1,27 @@
 from langgraph.graph import StateGraph, START, END
-from agents.state_messages import StateMessages
-from agents.planner import planner_node
-from agents.engineer import engineer_node
-from temp.executor import executor_node
-from agents.chatter import chat_node
-from Workers.supervisor import supervisor_node
-from agents.researcher import researcher_node
-from agents.reporter import reporter_node
-from langgraph.checkpoint.memory import InMemorySaver
+from Cores.States.structs import GraphState 
+from three_departments.dispatcher import dispatcher
+from three_departments.planner import planner
 
-checkpoint = InMemorySaver()
+graph = StateGraph(GraphState)
 
-graph = StateGraph(StateMessages)
-graph.add_node("chatter", chat_node)
-graph.add_node("supervisor", supervisor_node)
-graph.add_node("researcher", researcher_node)
-graph.add_node("reporter", reporter_node)
-graph.add_node("engineer", engineer_node)
+graph.add_node("dispatch", dispatcher)
+graph.add_node("plan", planner)
 
-
-graph.add_edge(START, "supervisor")
-
-# 任务调度器
+graph.add_edge(START, "dispatch")
 graph.add_conditional_edges(
-    "supervisor",
-    lambda state: state["next_node"],
+    "dispatch",
+    lambda state: state["intent_judge"],
     {
-        "researcher": "researcher",
-        "chatter": "chatter",
-        "reporter": "reporter",
-        "engineer": "engineer",
-        "END": END, 
-    },
+        "chat": END,
+        "task": "plan"
+    }
 )
+graph.add_edge("plan", END)
 
-# 聊天路径
-graph.add_edge("chatter", "supervisor")
+graph = graph.compile()
 
-# 搜索路径
-graph.add_edge("researcher", "supervisor")
-
-# 报告总结路径
-graph.add_edge("reporter", "supervisor")    
-
-# 编码路径
-graph.add_edge("engineer", "supervisor")
-
-graph = graph.compile(checkpointer=checkpoint)
+if __name__ == "__main__":
+    input = "你好"
+    result = graph.invoke({"user_input": input})
+    print(result)

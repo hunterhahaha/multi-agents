@@ -23,10 +23,7 @@ def dispatch(state: DispatcherStruct) -> DispatcherStruct:
 
     dispatch_llm = chat_model.with_structured_output(IntentJudge)
 
-    result = dispatch_llm(messages)
-
-    
-
+    result = dispatch_llm.invoke(messages)
 
     return {
         "intent_judge": result.intent_judge,

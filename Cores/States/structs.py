@@ -22,8 +22,12 @@ class WorkerStatus(str, Enum):
 
 # WorkerName，员工名称枚举
 class WorkerName(str, Enum):
-    """后续陆续添加进来"""
-    pass
+    frontend_engineer = "frontend engineer"
+    backend_engineer = "backend engineer"
+    data_engineer = "data engineer"
+    product_manager = "product manager"
+    test_engineer = "test engineer"
+    operations_engineer = "operations engineer"
 
 # TaskNode，任务节点描述
 class TaskNode(BaseModel):
@@ -128,6 +132,7 @@ class GraphState(TypedDict):
     # 长期记忆，多轮对话中保留
     messages_history: Annotated[list[BaseMessage], add_messages]
     # 任务级记忆，任务结束后销毁
+    user_input: str
     intent_judge: NotRequired[Literal["chat", "task"]]
     chat_reply: NotRequired[str]
     task: NotRequired[str]
@@ -138,3 +143,4 @@ class GraphState(TypedDict):
     reviewed_plan: NotRequired[DAG]
     workers_output: NotRequired[list[WorkerOutput]]
     report: NotRequired[str]
+    next_node: NotRequired[str]
