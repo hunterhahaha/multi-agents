@@ -110,12 +110,15 @@ class PlannerStruct(TypedDict):
     task: str
     plan: Optional[DAG] = Field(default=None, description="任务计划，DAG图，节点为任务，边为任务依赖关系")
     review: Optional[str] = Field(default=None, description="Reviewer 对计划的评审意见")
+    planner_messages: list[BaseMessage]
 
 # Reviewer，审核者状态
 class ReviewerStruct(TypedDict):
+    plan: Optional[DAG] = Field(default=None, description="任务计划，DAG图，节点为任务，边为任务依赖关系")
     review: Optional[str] = Field(default=None, description="Reviewer 对计划的评审意见")
     is_return: bool = Field(default=False, description="Reviewer 是否打回计划")
     return_count: int = Field(default=0, description="Reviewer 打回计划的次数，有最大上限，在实际程序中进行检测，暂定5次", )
+    reviewer_messages: list[BaseMessage]
 
 # Scheduler，调度者状态
 class SchedulerStruct(TypedDict):
@@ -144,3 +147,6 @@ class GraphState(TypedDict):
     workers_output: NotRequired[list[WorkerOutput]]
     report: NotRequired[str]
     next_node: NotRequired[str]
+    # 角色任务级对话记忆
+    planner_messages: NotRequired[list[BaseMessage]]
+    reviewer_messages: NotRequired[list[BaseMessage]]

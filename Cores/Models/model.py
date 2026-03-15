@@ -15,11 +15,21 @@ http_client = httpx.Client(
 chat_model_config = DeepseekChatModel(
     api_key=os.environ.get("DEEPSEEK_API_KEY"),
     api_url=os.environ.get("DEEPSEEK_API_URL"),
-    model_name=os.environ.get("DEEPSEEK_MODEL_NAME"),
+    model_name=os.environ.get("DEEPSEEK_CHAT_MODEL"),
     temperature=0,
+    http_client=http_client
+)
+
+reasoner_model_config = DeepseekChatModel(
+    api_key=os.environ.get("DEEPSEEK_API_KEY"),
+    api_url=os.environ.get("DEEPSEEK_API_URL"),
+    model_name=os.environ.get("DEEPSEEK_REASONER_MODEL"),
+    temperature=0,
+    http_client=http_client
 )
 
 chat_model = chat_model_config.build()
+reasoner_model = reasoner_model_config.build()
 
 # test
 if __name__ == "__main__":

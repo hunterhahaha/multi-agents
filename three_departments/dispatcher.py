@@ -1,10 +1,21 @@
 from Cores.Models.model import chat_model
-from Cores.States.structs import DispatcherStruct, GraphState
+from Cores.States.structs import DispatcherStruct
 from langgraph.graph import StateGraph, START, END
 from pydantic import BaseModel, Field
 from typing import Literal
 from Cores.Prompts.dispatcher import dispatcher_prompt
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain.tools import tool    
+from Cores.Agents.Base import BaseAegnt
+
+class IntentJudge(BaseModel):
+    intent_judge: Literal["chat", "task"]
+    output: str = Field(description="结果为chat时，输出聊天内容；结果为task时，输出任务描述")
+
+# 结构化输出工具
+@tool(description="结构化输出工具，必须调用该工具来结束整个任务。")
+def structured_output_tool(result: IntentJudge) -> IntentJudge:
+    return result
 
 dispatcher = StateGraph(DispatcherStruct)
 
@@ -12,18 +23,15 @@ def dispatch(state: DispatcherStruct) -> DispatcherStruct:
     """
     进行意图判断，实现聊天和任务的分拣
     """
-    class IntentJudge(BaseModel):
-        intent_judge: Literal["chat", "task"]
-        output: str = Field(description="结果为chat时，输出聊天内容；结果为task时，输出任务描述")
-    
+
     messages = [
         SystemMessage(content=dispatcher_prompt),
         HumanMessage(content=state["user_input"])
     ]
 
-    dispatch_llm = chat_model.with_structured_output(IntentJudge)
+    dispatch_agent = BaseAegnt(model=chat_model, tools=[structured_output_tool])
 
-    result = dispatch_llm.invoke(messages)
+    result = dispatch_agent.invoke(messages)
 
     return {
         "intent_judge": result.intent_judge,
