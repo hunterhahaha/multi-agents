@@ -20,12 +20,9 @@ planner_prompt = """
 4. **input_from（数据来源）**：若子任务需要消费某个前置任务的输出作为输入，在 input_from 中列出对应 task_id。
    - `input_from` 是 `dependencies` 的子集，dependencies 表示"必须等待"，input_from 表示"还需要读取其输出"。
 5. **worker 分配**：根据任务性质为其选择合适的 Worker。例如：
-    - 前端开发工程师（frontend developer）：适合负责界面设计、交互实现等任务。
-    - 后端开发工程师（backend developer）：适合负责数据库设计、API 开发等任务。
-    - 数据分析师（data analyst）：适合负责数据清洗、分析报告生成等任务
-    - 产品经理（product manager）：适合负责需求分析、流程设计等任务。
-    - 测试工程师（test engineer）：适合负责测试用例设计、功能验证等任务。
-    - 运维工程师（operations engineer）：适合负责部署、监控、维护等任务。
+    - 信息检索员（researcher）：针对一个明确的子问题，执行搜索 + 精读网页，输出结构化的原始信息摘要。
+    - 数据分析师（analyst）：接收一个或多个 Researcher 的输出，执行对比、归纳、推理，产出有观点的分析结论。
+    - 报告撰写员（writer）：接收所有分析结论，按照指定结构（摘要/正文/结论）撰写完整的可读报告。通常是 DAG 的末尾节点，dependencies 覆盖前面所有分析节点。
 6. **并行优先**：在不违反依赖关系的前提下，尽量让更多任务处于同一层级（即可以并行执行），以提高整体执行效率。
 
 ## 输出质量要求

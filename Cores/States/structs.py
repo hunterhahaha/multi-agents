@@ -22,12 +22,23 @@ class WorkerStatus(str, Enum):
 
 # WorkerName，员工名称枚举
 class WorkerName(str, Enum):
-    frontend_engineer = "frontend engineer"
-    backend_engineer = "backend engineer"
-    data_engineer = "data engineer"
-    product_manager = "product manager"
-    test_engineer = "test engineer"
-    operations_engineer = "operations engineer"
+    researcher = "researcher"
+    analyst = "analyst"
+    writer = "writer"
+
+# URLSource
+class URLSource(TypedDict):
+    url: str = Field(description="URL地址")
+    content: Optional[str] = Field(default=None, description="URL对应页面的内容摘要")
+
+# NoteEntry，笔记结构化工具输入输出
+class NoteEntry(BaseModel):
+    task_id: str = Field(description="相关任务ID")
+    worker: Optional[WorkerName] = Field(default=None, description="员工名称")
+    title: str = Field(description="笔记标题")
+    content: str = Field(description="笔记内容")
+    source: list[URLSource] = Field(default_factory=list, description="信息来源")
+    created_at: Optional[str] = Field(default=None, description="笔记创建时间，格式为 ISO 8601")
 
 # TaskNode，任务节点描述
 class TaskNode(BaseModel):
@@ -150,3 +161,9 @@ class GraphState(TypedDict):
     # 角色任务级对话记忆
     planner_messages: NotRequired[list[BaseMessage]]
     reviewer_messages: NotRequired[list[BaseMessage]]
+    # 员工记录
+    notes: NotRequired[list[NoteEntry]]
+
+# WorkerState，员工状态
+class WorkerState(TypedDict):
+    notes: NotRequired[list[NoteEntry]]

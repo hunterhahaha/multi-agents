@@ -5,6 +5,7 @@ os.environ["USER_AGENT"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 import requests
 from langchain.tools import tool
 from langchain_community.document_loaders import WebBaseLoader
+from Cores.States.structs import NoteEntry
 
 SEARXNG_URL = "http://localhost:8080/search"
 
@@ -53,10 +54,32 @@ def fetch_webpage(url: str) -> str:
         return content
     except Exception as e:
         return f"加载页面内容时出错: {str(e)}"
-    
-@tool
-def final_answer(answer: str) -> str:
+
+@tool(description="将检索到的关键信息结构化写入笔记")
+def save_note(note: NoteEntry):
     """
-    用于返回最终答案。
+    将检索到的关键信息结构化写入笔记，便于后续整理和输出报告。
     """
-    return answer
+    return note
+
+@tool(description="读取所有带标签的笔记内容，作为写作素材汇总输入")
+def read_note(notes: list[NoteEntry]) -> str:
+    """
+    汇总所有带标签的笔记内容。
+    """
+    content = ""
+    for note in notes:
+        content += f"笔记标题: {note.title}\n笔记内容: {note.content}\n来源: {[s.url for s in note.source]}\n\n"
+    return content.strip()
+
+@tool(description="将最终报告输出到文件（Markdown格式）")
+def save_report(Report: str) -> str:
+    """
+    将最终报告输出到文件（Markdown格式）
+    """
+    try:
+        with open("reports/final_report.md", "w", encoding="utf-8") as f:
+            f.write(Report)
+        return "报告已成功保存到 final_report.md"
+    except Exception as e:
+        return f"保存报告时出错: {str(e)}"
