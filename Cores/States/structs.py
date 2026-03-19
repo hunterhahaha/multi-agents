@@ -4,6 +4,7 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel, Field
 from enum import Enum
 from langgraph.graph import add_messages
+import operator
 
 MAX_RETURN_COUNT = 5 # Reviewer 打回计划的最大次数上限
 
@@ -15,7 +16,7 @@ class TaskStatus(str, Enum):
     DONE = "done" # 已完成
     FAILURE = "failure" # 执行失败
 
-# WORKER_STATUS，员工最终状态枚举
+# WorkerStatus，员工最终状态枚举
 class WorkerStatus(str, Enum):
     DONE = "done" # 已完成
     FAILURE = "failure" # 执行失败
@@ -131,11 +132,6 @@ class ReviewerStruct(TypedDict):
     return_count: int = Field(default=0, description="Reviewer 打回计划的次数，有最大上限，在实际程序中进行检测，暂定5次", )
     reviewer_messages: list[BaseMessage]
 
-# Scheduler，调度者状态
-class SchedulerStruct(TypedDict):
-    reviewed_plan: Optional[DAG] = Field(default=None, description="经过 Reviewer 审核通过的计划")
-    workers_output: list[WorkerOutput] = Field(default_factory=list, description="每个 worker 执行完成后的结果的聚合列表")
-
 # Reporter，报告者状态
 class ReporterStruct(TypedDict):
     workers_output: list[WorkerOutput] = Field(default_factory=list, description="每个 worker 执行完成后的结果的聚合列表")
@@ -161,9 +157,13 @@ class GraphState(TypedDict):
     # 角色任务级对话记忆
     planner_messages: NotRequired[list[BaseMessage]]
     reviewer_messages: NotRequired[list[BaseMessage]]
-    # 员工记录
-    notes: NotRequired[list[NoteEntry]]
+    # 员工执行模块
+    summary: NotRequired[str]
 
-# WorkerState，员工状态
-class WorkerState(TypedDict):
-    notes: NotRequired[list[NoteEntry]]
+class SchedulerState(TypedDict):
+    reviewed_plan: DAG
+    finished: NotRequired[list[str]]
+    failure: NotRequired[list[str]]
+    ready: NotRequired[list[str]]
+    summary: NotRequired[str]
+    retry_count: NotRequired[dict[str, int]]
